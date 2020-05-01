@@ -3,7 +3,16 @@
 
 Code and analyses for the IEP long-term monitoring review pilot in 2020.
 
-# git and github resources
+# git and github
+
+## Workflow
+
+1.  edit code
+2.  commit changes
+3.  pull
+4.  push
+
+## Resources
 
   - [Happy git with R](https://happygitwithr.com/)
   - [This NCEAS
