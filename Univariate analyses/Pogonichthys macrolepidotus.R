@@ -4,75 +4,244 @@ require(mgcv)
 require(lubridate)
 require(tidyr)
 require(brms)
+require(gamm4)
+require(ggplot2)
+require(purrr)
 
 Data <- LTMRpilot(convert_lengths=TRUE, remove_unconverted_lengths = TRUE, size_cutoff=40)%>%
   zero_fill(species="Pogonichthys macrolepidotus", remove_unknown_lengths = TRUE, univariate = TRUE)%>%
+  filter(Method=="Otter trawl")%>%
   group_by(Source, Station, Latitude, Longitude, Date, Datetime, SampleID, Tow_area, Tow_volume, Sal_surf, Temp_surf, Method)%>%
   summarise(Count=sum(Count))%>%
   ungroup()%>%
-  drop_na(Sal_surf, Temp_surf, Count, Latitude, Longitude, Date)%>%
+  drop_na(Sal_surf, Temp_surf, Count, Latitude, Longitude, Date, Tow_area)%>%
   mutate(Julian_day=yday(Date),
          Year=year(Date),
-         Month=month(Date))%>%
-  mutate_at(vars(Longitude, Latitude, Year, Julian_day, Sal_surf, Temp_surf), list(s=~(.-mean(., na.rm=T))/sd(., na.rm=T))) # Create centered and standardized versions of covariates
+         Month=month(Date),
+         CPUE=Count/Tow_area,
+         Station_fac=factor(Station),
+         Year_fac=ordered(Year))%>%
+  mutate_at(vars(Longitude, Latitude, Year, Julian_day, Sal_surf, Temp_surf, Tow_area), list(s=~(.-mean(., na.rm=T))/sd(., na.rm=T))) # Create centered and standardized versions of covariates
 
-mtw<-gam(log(Count+1) ~ te(Latitude_s, Longitude_s, Year_s, d=c(2,1), k=c(20, 10)) + s(Julian_day_s, bs="cc") + Source, 
+Stations<-Data%>%
+  group_by(Source, Year, Station)%>%
+  summarize(Avg_CPUE=mean(CPUE))%>%
+  ungroup()%>%
+  group_by(Source, Station)%>%
+  summarize(Avg_CPUE=mean(Avg_CPUE))%>%
+  ungroup()%>%
+  filter(Avg_CPUE>0.005)
+
+Data2<-Data%>%
+  filter(Station%in%unique(Stations$Station))%>%
+  droplevels()
+
+# log(CPUE+1), numeric year, tw family
+m2 <- bam(log(CPUE+1) ~ s(Year_s) + s(Julian_day_s) + s(Station_fac, bs="re"), family=tw, data=Data2, method="fREML", discrete=T, nthreads=4)
+
+# CPUE, numeric year, tw family
+m22 <- bam(CPUE ~ s(Year) + s(Julian_day) + s(Station_fac, bs="re"), family=tw, data=Data2, method="fREML", discrete=T, nthreads=4)
+
+# Count, Tow_area, numeric year, tw family
+m23 <- bam(Count ~ Tow_area_s + s(Year_s) + s(Julian_day_s) + s(Station_fac, bs="re"), family=tw, data=Data2, method="fREML", discrete=T, nthreads=4)
+
+# log(Count+1), Tow_area, numeric year, tw family
+m24 <- bam(log(Count+1) ~ Tow_area + s(Year) + s(Julian_day) + s(Station_fac, bs="re"), family=tw, data=Data2, method="fREML", discrete=T, nthreads=4)
+
+# round(Count), Tow_area, numeric year, negative binomial family
+m25 <- bam(as.integer(round(Count)) ~ Tow_area_s + s(Year_s) + s(Julian_day_s) + s(Station_fac, bs="re"), family=nb, data=Data2, method="fREML", discrete=T, nthreads=4)
+
+# round(Count), Tow_area, numeric year, poisson family
+m26 <- bam(as.integer(round(Count)) ~ Tow_area_s + s(Year_s) + s(Julian_day_s) + s(Station_fac, bs="re"), family=poisson, data=Data2, method="fREML", discrete=T, nthreads=4)
+
+# round(Count), Tow_area, numeric year, quasipoisson family
+m27 <- bam(as.integer(round(Count)) ~ Tow_area_s + s(Year_s) + s(Julian_day_s) + s(Station_fac, bs="re"), family=quasipoisson, data=Data2, method="fREML", discrete=T, nthreads=4)
+
+# round(Count), Tow_area, numeric year, zero inflated poisson family
+m28 <- bam(as.integer(round(Count)) ~ Tow_area_s + s(Year_s) + s(Julian_day_s) + s(Station_fac, bs="re"), family=ziP, data=Data2, method="fREML", discrete=T, nthreads=4)
+
+# log(CPUE+1), factor year, tw family
+m29 <- bam(log(CPUE+1) ~ Year_fac + s(Julian_day_s) + s(Station_fac, bs="re"), family=tw, data=Data2, method="fREML", discrete=T, nthreads=4)
+
+# CPUE, factor year, tw family
+m210 <- bam(CPUE ~ Year_fac + s(Julian_day_s) + s(Station_fac, bs="re"), family=tw, data=Data2, method="fREML", discrete=T, nthreads=4)
+
+# log(Count+1), Tow_area, factor year, tw family
+m211 <- bam(log(Count+1) ~ Tow_area_s + Year_fac + s(Julian_day_s) + s(Station_fac, bs="re"), family=tw, data=Data2, method="fREML", discrete=T, nthreads=4)
+
+# Count, Tow_area, factor year, tw family
+m212 <- bam(Count ~ Tow_area_s + Year_fac + s(Julian_day_s) + s(Station_fac, bs="re"), family=tw, data=Data2, method="fREML", discrete=T, nthreads=4)
+
+# round(Count), Tow_area, factor year, negative binomial family
+m213 <- bam(as.integer(round(Count)) ~ Tow_area_s + Year_fac + s(Julian_day_s) + s(Station_fac, bs="re"), family=nb, data=Data2, method="fREML", discrete=T, nthreads=4)
+
+# round(Count), Tow_area, factor year, poisson family
+m214 <- bam(as.integer(round(Count)) ~ Tow_area_s + Year_fac + s(Julian_day_s) + s(Station_fac, bs="re"), family=poisson, data=Data2, method="fREML", discrete=T, nthreads=4)
+
+# round(Count), Tow_area, factor year, quasipoisson family
+m215 <- bam(as.integer(round(Count)) ~ Tow_area_s + Year_fac + s(Julian_day_s) + s(Station_fac, bs="re"), family=quasipoisson, data=Data2, method="fREML", discrete=T, nthreads=4)
+
+# round(Count), Tow_area, factor year, zero inflated poisson family
+m216 <- bam(as.integer(round(Count)) ~ Tow_area_s + Year_fac + s(Julian_day_s) + s(Station_fac, bs="re"), family=ziP, data=Data2, method="fREML", discrete=T, nthreads=4)
+
+# round(Count), Tow_area, factor year, zero inflated poisson family
+m217 <- bam(Count ~ Tow_area_s + te(Latitude_s, Longitude_s, Year_s, d=c(2,1), k=c(20, 10)) + s(Julian_day_s, bs="cc"), family=tw, data=Data2, method="fREML", discrete=T, nthreads=4)
+
+fit_plot<-function(model, X, title, subtitle){
+  fit<-fitted(model)
+  p<-ggplot(data=Data2)+
+    geom_point(aes(x=X, y=fit), alpha=0.2)+
+    geom_abline(intercept = 0, slope=1, color="red", size=1)+
+    ggtitle(label=title, subtitle = subtitle)+
+    xlab("Response")+
+    ylab("Model predicted fitted value")+
+    coord_fixed()+
+    theme_bw()
+  
+  return(p)
+}
+
+
+
+p<-pmap(list(model=list(m2, m22, m23, m24, m25, m26, m27, m28, m29, m210, m211, m212, m213, m214, m215, m216),
+             X=list(log(Data2$CPUE+1), 
+                    Data2$CPUE, 
+                    Data2$Count, 
+                    log(Data2$Count+1), 
+                    as.integer(round(Data2$Count)), 
+                    as.integer(round(Data2$Count)), 
+                    as.integer(round(Data2$Count)), 
+                    as.integer(round(Data2$Count)), 
+                    log(Data2$CPUE+1), 
+                    Data2$CPUE, 
+                    log(Data2$Count+1), 
+                    Data2$Count, 
+                    as.integer(round(Data2$Count)), 
+                    as.integer(round(Data2$Count)), 
+                    as.integer(round(Data2$Count)), 
+                    as.integer(round(Data2$Count))),
+             title=list('log(CPUE+1), numeric year, tw family', 
+                        'CPUE, numeric year, tw family', 
+                        'Count, Tow_area, numeric year, tw family',
+                        'log(Count+1), Tow_area, numeric year, tw family', 
+                        'round(Count), Tow_area, numeric year, negative binomial family',
+                        'round(Count), Tow_area, numeric year, poisson family', 
+                        'round(Count), Tow_area, numeric year, quasipoisson family',
+                        'round(Count), Tow_area, numeric year, zero inflated poisson family', 
+                        'log(CPUE+1), factor year, tw family',
+                        'CPUE, factor year, tw family', 
+                        'log(Count+1), Tow_area, factor year, tw family', 
+                        'Count, Tow_area, factor year, tw family',
+                        'round(Count), Tow_area, factor year, negative binomial family', 
+                        'round(Count), Tow_area, factor year, poisson family',
+                        'round(Count), Tow_area, factor year, quasipoisson family', 
+                        'round(Count), Tow_area, factor year, zero inflated poisson family'),
+             subtitle=c('bam(log(CPUE+1) ~ s(Year_s) + s(Julian_day_s) + s(Station_fac, bs="re"), family=tw)',
+                        'bam(CPUE ~ s(Year) + s(Julian_day) + s(Station_fac, bs="re"), family=tw)',
+                        'bam(Count ~ Tow_area_s + s(Year_s) + s(Julian_day_s) + s(Station_fac, bs="re"), family=tw)',
+                        'bam(log(Count+1) ~ Tow_area + s(Year) + s(Julian_day) + s(Station_fac, bs="re"), family=tw)',
+                        'bam(as.integer(round(Count)) ~ Tow_area_s + s(Year_s) + s(Julian_day_s) + s(Station_fac, bs="re"), family=nb)',
+                        'bam(as.integer(round(Count)) ~ Tow_area_s + s(Year_s) + s(Julian_day_s) + s(Station_fac, bs="re"), family=poisson)',
+                        'bam(as.integer(round(Count)) ~ Tow_area_s + s(Year_s) + s(Julian_day_s) + s(Station_fac, bs="re"), family=quasipoisson)',
+                        'bam(as.integer(round(Count)) ~ Tow_area_s + s(Year_s) + s(Julian_day_s) + s(Station_fac, bs="re"), family=ziP)',
+                        'bam(log(CPUE+1) ~ Year_fac + s(Julian_day_s) + s(Station_fac, bs="re"), family=tw)',
+                        'bam(CPUE ~ Year_fac + s(Julian_day_s) + s(Station_fac, bs="re"), family=tw)',
+                        'bam(log(Count+1) ~ Tow_area_s + Year_fac + s(Julian_day_s) + s(Station_fac, bs="re"), family=tw)',
+                        'bam(Count ~ Tow_area_s + Year_fac + s(Julian_day_s) + s(Station_fac, bs="re"), family=tw)',
+                        'bam(as.integer(round(Count)) ~ Tow_area_s + Year_fac + s(Julian_day_s) + s(Station_fac, bs="re"), family=nb)',
+                        'bam(as.integer(round(Count)) ~ Tow_area_s + Year_fac + s(Julian_day_s) + s(Station_fac, bs="re"), family=poisson)',
+                        'bam(as.integer(round(Count)) ~ Tow_area_s + Year_fac + s(Julian_day_s) + s(Station_fac, bs="re"), family=quasipoisson)',
+                        'bam(as.integer(round(Count)) ~ Tow_area_s + Year_fac + s(Julian_day_s) + s(Station_fac, bs="re"), family=ziP)')),
+        fit_plot)
+
+
+walk2(p, paste("model", 1:16), ~ggsave(filename = paste0("Univariate analyses/Figures/", .y, ".png"), plot = .x, device = "png", width=15, height=6, units="in"))
+
+
+
+
+
+
+
+
+
+
+
+mtw<-gam(log(Count+1) ~ Tow_area_s + te(Latitude_s, Longitude_s, Year_s, d=c(2,1), k=c(20, 10)) + s(Julian_day_s, bs="cc") + Source, 
          family=tw(), data=filter(Data, Method=="Otter trawl"))
 
-mzip<-gam(as.integer(round(Count)) ~ te(Latitude_s, Longitude_s, Year_s, d=c(2,1), k=c(20, 10)) + s(Julian_day_s, bs="cc") + Source, 
+mzip<-gam(as.integer(round(Count)) ~ Tow_area_s + te(Latitude_s, Longitude_s, Year_s, d=c(2,1), k=c(20, 10)) + s(Julian_day_s, bs="cc") + Source, 
           family=ziP(), data=filter(Data, Method=="Otter trawl"))
 
-mzip2<-gam(list(as.integer(round(Count)) ~ te(Latitude_s, Longitude_s, Year_s, d=c(2,1), k=c(20, 10), bs="ds") + s(Julian_day_s, bs="cc", m=1) + Source, ~s(Sal_surf_s, m=1)), 
-          family=ziplss(), data=filter(Data, Method=="Otter trawl"))
+mzip2<-gam(list(as.integer(round(Count)) ~ Tow_area_s + te(Latitude_s, Longitude_s, Year_s, d=c(2,1), k=c(20, 10), bs="ds") + s(Julian_day_s, bs="cc", m=1) + Source, ~s(Sal_surf_s, m=1)), 
+           family=ziplss(), data=filter(Data, Method=="Otter trawl"))
 
-mtw2<-gam(log(Count+1) ~ te(Latitude_s, Longitude_s, Year_s, d=c(2,1), k=c(20, 10)) + s(Julian_day_s, bs="cc") + Source + s(Sal_surf_s) + s(Temp_surf_s), 
-        family=tw(), data=filter(Data, Method=="Otter trawl"))
+mnb<-bam(as.integer(round(Count)) ~ Tow_area_s + te(Latitude_s, Longitude_s, Year_s, d=c(2,1), k=c(20, 10), bs="ds") + s(Julian_day_s, bs="cc", m=1) + Source, 
+         family=nb(), data=filter(Data, Method=="Otter trawl"), method="fREML", discrete=T, nthreads=4)
 
-mtw3<-gam(log(Count+1) ~ te(Latitude_s, Longitude_s, Year_s, d=c(2,1), k=c(20, 10)) + s(Julian_day_s, bs="cc") + Source + poly(Sal_surf_s, 2) + s(Temp_surf_s), 
+mnb2<-bam(as.integer(round(Count)) ~ Tow_area_s + te(Latitude_s, Longitude_s, Year_s, d=c(2,1), k=c(20, 10), bs="ds") + s(Julian_day_s, bs="cc", m=1) + Source, 
+          family=nb(), data=filter(Data, Method=="Otter trawl" & Count>0), method="fREML", discrete=T, nthreads=4)
+
+mtw2<-gam(log(Count+1) ~ Tow_area_s + te(Latitude_s, Longitude_s, Year_s, d=c(2,1), k=c(20, 10)) + s(Julian_day_s, bs="cc") + Source + s(Sal_surf_s) + s(Temp_surf_s), 
           family=tw(), data=filter(Data, Method=="Otter trawl"))
 
-mtw4<-gam(log(Count+1) ~ te(Latitude_s, Longitude_s, Year_s, d=c(2,1), k=c(20, 10)) + s(Month, bs="cc") + Source + poly(Sal_surf_s, 2) + s(Temp_surf_s), 
+mtw3<-gam(log(Count+1) ~ Tow_area_s + te(Latitude_s, Longitude_s, Year_s, d=c(2,1), k=c(20, 10)) + s(Julian_day_s, bs="cc") + Source + poly(Sal_surf_s, 2) + s(Temp_surf_s), 
           family=tw(), data=filter(Data, Method=="Otter trawl"))
+
+mtw4<-gam(log(Count+1) ~ Tow_area_s + te(Latitude_s, Longitude_s, Year_s, d=c(2,1), k=c(20, 10)) + s(Month, bs="cc") + Source + s(Sal_surf_s) + s(Temp_surf_s), 
+          family=tw(), data=filter(Data, Method=="Otter trawl"))
+
+# Remove stations where the species has never been seen
+# Make Year a factor
+# Try other species that are less "boom or bust"
+# Try simpler models like gamm(CPUE ~ Year + (1|Station))
+
+# Take splittail, eliminate stations where they're caught less than 15 times per year, normalize data, then build simple gamm(CPUE ~ Year + Source+ 1|Station)
 
 iterations <- 5e3
 warmup <- iterations/4
-mbayes<- brm(Count ~ t2(Latitude_s, Longitude_s, Year_s, d=c(2,1), k=c(15, 10)) + s(Julian_day_s, bs="cc") + Source + s(Sal_surf_s) + s(Temp_surf_s),
-             family=hurdle_gamma(), data=filter(Data, Method=="Otter trawl"),
-             prior=prior(normal(0,10), class="Intercept")+
-               prior(normal(0,5), class="b"),
-             chains=1, cores=1,
-             iter = iterations, warmup = warmup)
+mbhg<- brm(Count ~ Tow_area_s + t2(Latitude_s, Longitude_s, Year_s, d=c(2,1), k=c(15, 10)) + s(Julian_day_s, bs="cc") + Source + s(Sal_surf_s) + s(Temp_surf_s),
+           family=hurdle_gamma(), data=filter(Data, Method=="Otter trawl"),
+           prior=prior(normal(0,10), class="Intercept")+
+             prior(normal(0,5), class="b"),
+           chains=1, cores=1, control=list(adapt_delta=0.9),
+           iter = iterations, warmup = warmup)
 
-mbayes2<- brm(Count ~ t2(Latitude_s, Longitude_s, Year_s, d=c(2,1), k=c(15, 10)) + s(Julian_day_s, bs="cc") + Source + s(Sal_surf_s) + s(Temp_surf_s),
-             family=hurdle_lognormal(), data=filter(Data, Method=="Otter trawl"),
-             prior=prior(normal(0,10), class="Intercept")+
-               prior(normal(0,5), class="b")+
-               prior(cauchy(0,5), class="sigma"),
-             chains=1, cores=1,
-             iter = iterations, warmup = warmup)
+mbhg2<- brm(CPUE ~ t2(Latitude_s, Longitude_s, Year_s, d=c(2,1), k=c(15, 10)) + s(Julian_day_s, bs="cc") + Source,
+            family=hurdle_gamma(), data=filter(Data, Method=="Otter trawl"),
+            prior=prior(normal(0,10), class="Intercept")+
+              prior(normal(0,5), class="b"),
+            chains=1, cores=1, control=list(adapt_delta=0.9),
+            iter = iterations, warmup = warmup)
 
-mbayes3<- brm(Count ~ t2(Latitude_s, Longitude_s, Year_s, d=c(2,1), k=c(15, 10)) + s(Julian_day_s, bs="cc") + Source + s(Sal_surf_s) + s(Temp_surf_s),
-              family=hurdle_poisson(), data=filter(Data, Method=="Otter trawl"),
-              prior=prior(normal(0,10), class="Intercept")+
-                prior(normal(0,5), class="b")+
-                prior(cauchy(0,5), class="sigma"),
-              chains=1, cores=1,
-              iter = iterations, warmup = warmup)
+mbhln<- brm(Count ~ Tow_area_s + t2(Latitude_s, Longitude_s, Year_s, d=c(2,1), k=c(15, 10)) + s(Julian_day_s, bs="cc") + Source + s(Sal_surf_s) + s(Temp_surf_s),
+            family=hurdle_lognormal(), data=filter(Data, Method=="Otter trawl"),
+            prior=prior(normal(0,10), class="Intercept")+
+              prior(normal(0,5), class="b")+
+              prior(cauchy(0,5), class="sigma"),
+            chains=1, cores=1,
+            iter = iterations, warmup = warmup)
+
+mbnb<- brm(as.integer(round(Count)) ~ Tow_area_s + t2(Latitude_s, Longitude_s, Year_s, d=c(2,1), k=c(15, 10)) + s(Julian_day_s, bs="cc") + Source + s(Sal_surf_s) + s(Temp_surf_s),
+           family=hurdle_negbinomial(), data=filter(Data, Method=="Otter trawl"),
+           prior=prior(normal(0,10), class="Intercept")+
+             prior(normal(0,5), class="b"),
+           chains=1, cores=1,
+           iter = iterations, warmup = warmup)
 
 Data_length <- LTMRpilot(convert_lengths=TRUE, remove_unconverted_lengths = TRUE, size_cutoff=40)%>%
   zero_fill(species="Pogonichthys macrolepidotus", remove_unknown_lengths = TRUE, univariate = TRUE)%>%
-  drop_na(Sal_surf, Temp_surf, Latitude, Longitude, Date)%>%
+  drop_na(Sal_surf, Temp_surf, Latitude, Longitude, Date, Tow_area)%>%
   mutate(Julian_day=yday(Date),
          Year=year(Date),
          Month=month(Date))%>%
-  mutate_at(vars(Longitude, Latitude, Year, Julian_day, Sal_surf, Temp_surf, Length), list(s=~(.-mean(., na.rm=T))/sd(., na.rm=T))) # Create centered and standardized versions of covariates
+  mutate_at(vars(Longitude, Latitude, Year, Julian_day, Sal_surf, Temp_surf, Tow_area, Length), list(s=~(.-mean(., na.rm=T))/sd(., na.rm=T)))%>% # Create centered and standardized versions of covariates
+  mutate(Length_s=replace_na(Length_s, 0))
 
-
-mbayes3<- brm(bf(Count ~ t2(Latitude_s, Longitude_s, Year_s, d=c(2,1), k=c(15, 10)) + s(Julian_day_s, bs="cc") + Source + s(Sal_surf_s) + s(Temp_surf_s) + Length_s,
-                 hu~s(Sal_surf_s)),
-              family=hurdle_poisson(), data=filter(Data, Method=="Otter trawl"),
+mbayes4<- brm(bf(as.integer(round(Count)) ~ Tow_area_s + t2(Latitude_s, Longitude_s, Year_s, d=c(2,1), k=c(15, 10)) + s(Julian_day_s, bs="cc") + Source + poly(Sal_surf_s, 2) + s(Temp_surf_s) + Length_s,
+                 hu~poly(Sal_surf_s, 2)),
+              family=hurdle_poisson(), data=filter(Data_length, Method=="Otter trawl"),
               prior=prior(normal(0,10), class="Intercept")+
-                prior(normal(0,5), class="b")+
-                prior(cauchy(0,5), class="sigma"),
+                prior(normal(0,5), class="b"),
               chains=1, cores=1,
               iter = iterations, warmup = warmup)
