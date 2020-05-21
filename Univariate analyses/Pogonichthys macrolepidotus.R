@@ -35,7 +35,7 @@ Stations<-Data%>%
   group_by(Source, Station)%>%
   summarize(Avg_CPUE=mean(Avg_CPUE))%>%
   ungroup()%>%
-  filter(Avg_CPUE>0.0025)
+  filter(Avg_CPUE>0.005)
 
 Data2<-Data%>%
   filter(Station%in%unique(Stations$Station))%>%
