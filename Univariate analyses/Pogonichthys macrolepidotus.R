@@ -11,7 +11,7 @@ require(purrr)
 Data <- LTMRpilot(convert_lengths=TRUE, remove_unconverted_lengths = TRUE, size_cutoff=40)%>%
   zero_fill(species="Pogonichthys macrolepidotus", remove_unknown_lengths = TRUE, univariate = TRUE)%>%
   filter(Method=="Otter trawl")%>%
-  drop_na(Sal_surf, Temp_surf, Count, Datetime, Latitude, Longitude, Date)%>%
+  drop_na(Sal_surf, Temp_surf, Count, Latitude, Longitude, Date, Tow_area)%>%
   group_by(Source, Station, Latitude, Longitude, Date, Tow_area, SampleID, Tow_area, Sal_surf, Temp_surf)%>%
   summarise(Count=sum(Count), Length=mean(Length, na.rm=T))%>%
   ungroup()%>%
@@ -29,13 +29,10 @@ Data <- LTMRpilot(convert_lengths=TRUE, remove_unconverted_lengths = TRUE, size_
   arrange(Date)
 
 Stations<-Data%>%
-  group_by(Source, Year, Station)%>%
-  summarize(Avg_CPUE=mean(CPUE))%>%
-  ungroup()%>%
   group_by(Source, Station)%>%
-  summarize(Avg_CPUE=mean(Avg_CPUE))%>%
+  summarize(Detection_prop=length(which(CPUE>0))/n())%>%
   ungroup()%>%
-  filter(Avg_CPUE>0.005)
+  filter(Detection_prop>1/12)
 
 Data2<-Data%>%
   filter(Station%in%unique(Stations$Station))%>%
@@ -117,8 +114,14 @@ m223<- bam(CPUE^(1/3) ~ Year_fac*Station_fac + s(Julian_day_s, by=Station_fac), 
 # CPUE^(1/3), 3D smooth with julian day, factor year, and factor station, tw family
 m224 <- bam(CPUE^(1/3) ~ te(Julian_day_s, Year_fac, Station_fac, bs=c("cc", "fs", "fs")), family=tw, data=Data2, method="fREML", discrete=T, nthreads=4)
 
+# CPUE^(1/3), 3D smooth with julian day, factor year, and factor station, nb family
+m224b <- bam(as.integer(round(Count)) ~ te(Julian_day_s, Year_fac, Station_fac, bs=c("cc", "fs", "fs")), family=nb, data=Data2, method="fREML", discrete=T, nthreads=4)
+
 # CPUE^(1/3), 3D smooth with julian day, factor year, and factor station, tw family
 m225 <- bam(CPUE^(1/3) ~ te(Julian_day_s, Year_fac, Station_fac, bs=c("cc", "re", "re")), family=tw, data=Data2, method="fREML", discrete=T, nthreads=4)
+
+# CPUE^(1/3), 3D smooth with julian day, factor year, and factor station, tw family
+m226 <- bam(CPUE^(1/3) ~ te(Month, Year, by=Station_fac, bs=c("cc", "tp"), k=c(5,39)), select=T, family=tw, data=Data2, method="fREML", discrete=F, nthreads=4, knots=list(Month = c(0.5, 12.5)))
 
 fit_plot<-function(model, X, title, subtitle, type="fit"){
   if(type=="fit"){
@@ -222,6 +225,57 @@ walk2(p, paste("model", 1:24), ~ggsave(filename = paste0("Univariate analyses/Fi
 
 
 
+iterations <- 5e3
+warmup <- iterations/4
+mbrm<-brm(as.integer(round(Count)) ~ offset(Tow_area_s) + (1|Year) + (1|Month) + (1|Station),
+          family=negbinomial, data=Data2,
+          prior=prior(normal(0,10), class="Intercept")+
+            prior(cauchy(0,5), class="sd"),
+          chains=1, cores=1,
+          iter = iterations, warmup = warmup)
+
+mbrmb<-brm(as.integer(round(Count)) ~ Tow_area_s + (1|Year) + (1|Month) + (1|Station),
+          family=negbinomial, data=Data2,
+          prior=prior(normal(0,10), class="Intercept")+
+            prior(cauchy(0,5), class="sd"),
+          chains=1, cores=1,
+          iter = iterations, warmup = warmup)
+
+mbrm2<-brm(as.integer(round(Count)) ~ offset(Tow_area_s) + (1|Year/Month/Station),
+           family=negbinomial, data=Data2,
+           prior=prior(normal(0,10), class="Intercept")+
+             prior(cauchy(0,5), class="sd"),
+           chains=1, cores=1,
+           iter = iterations, warmup = warmup)
+
+mbrm2b<-brm(as.integer(round(Count)) ~ Tow_area_s + (1|Year/Month/Station),
+           family=negbinomial, data=Data2,
+           prior=prior(normal(0,10), class="Intercept")+
+             prior(cauchy(0,5), class="sd"),
+           chains=1, cores=1,
+           iter = iterations, warmup = warmup)
+
+mbrm2c<-brm(as.integer(round(Count)) ~ Tow_area_s + (1|Year/Month/Station),
+            family=negbinomial, data=Data,
+            prior=prior(normal(0,10), class="Intercept")+
+              prior(cauchy(0,5), class="sd"),
+            chains=1, cores=1,
+            iter = iterations, warmup = warmup)
+
+mbrm2d<-brm(as.integer(round(Count)) ~ Tow_area_s + (1|Year/Month/Station),
+            family=poisson, data=Data,
+            prior=prior(normal(0,10), class="Intercept")+
+              prior(cauchy(0,5), class="sd"),
+            chains=1, cores=1,
+            iter = iterations, warmup = warmup)
+
+mbrm3<-brm(as.integer(round(Count)) ~ Tow_area_s + (1|Year/Month/Station),
+            family=hurdle_negbinomial, data=Data2,
+            prior=prior(normal(0,10), class="Intercept")+
+              prior(cauchy(0,5), class="sd"),
+            chains=1, cores=1,
+            iter = iterations, warmup = warmup)
+
 
 
 # Including length --------------------------------------------------------
@@ -244,8 +298,6 @@ Data_length <- LTMRpilot(convert_lengths=TRUE, remove_unconverted_lengths = TRUE
 
 # Length
 m221<- gam(list(as.integer(round(Count)) ~ s(Year_s) + s(Julian_day_s, bs="cc") + s(Length_s, k=100) + s(Station_fac, bs="re"), ~s(Sal_surf_s)), family=ziplss, data=Data_length, method="REML")
-
-
 
 
 # Old models --------------------------------------------------------------
