@@ -10,28 +10,34 @@ require(purrr)
 
 Data <- LTMRpilot(convert_lengths=TRUE, remove_unconverted_lengths = TRUE, size_cutoff=40)%>%
   zero_fill(species="Pogonichthys macrolepidotus", remove_unknown_lengths = TRUE, univariate = TRUE)%>%
-  filter(Method=="Otter trawl")%>%
+  filter(Method=="Otter trawl" & year(Date)>=1980 & year(Date)<=2019)%>%
   drop_na(Sal_surf, Temp_surf, Count, Latitude, Longitude, Date, Tow_area)%>%
-  group_by(Source, Station, Latitude, Longitude, Date, Tow_area, SampleID, Tow_area, Sal_surf, Temp_surf)%>%
-  summarise(Count=sum(Count), Length=mean(Length, na.rm=T))%>%
-  ungroup()%>%
+  group_by(Source, Station, Latitude, Longitude, Date, Tow_area, SampleID, Sal_surf, Temp_surf)%>%
+  summarise(Count=sum(Count), Length=mean(Length, na.rm=T), .groups="drop")%>%
   group_by(Source, Station, Latitude, Longitude, Date)%>%
-  summarise(Count=sum(Count), Tow_area=sum(Tow_area), Sal_surf=mean(Sal_surf), Temp_surf=mean(Temp_surf), Length=mean(Length, na.rm=T))%>%
-  ungroup()%>%
+  summarise(Count=sum(Count), Tow_area=sum(Tow_area), Sal_surf=mean(Sal_surf), 
+            Temp_surf=mean(Temp_surf), Length=mean(Length, na.rm=T), .groups="drop")%>%
   mutate(Julian_day=yday(Date),
          Year=year(Date),
          Month=month(Date),
          CPUE=Count/Tow_area,
-         Station_fac=factor(Station),
-         Year_fac=ordered(Year),
-         Month_fac=ordered(Month))%>%
+         Station_fac=factor(Station))%>%
+  mutate(Year=if_else(Month==12, Year+1, Year))%>%
+  mutate(Year_fac=ordered(Year),
+         Month_fac=ordered(Month),
+         ID=1:nrow(.),
+         Season=case_when(
+           Month%in%c(12,1,2) ~ "Winter",
+           Month%in%c(3,4,5) ~ "Spring",
+           Month%in%c(6,7,8) ~ "Summer",
+           Month%in%c(9,10,11) ~ "Fall"
+         ))%>%
   mutate_at(vars(Length, Longitude, Latitude, Year, Julian_day, Sal_surf, Temp_surf, Tow_area), list(s=~(.-mean(., na.rm=T))/sd(., na.rm=T)))%>% # Create centered and standardized versions of covariates
   arrange(Date)
 
 Stations<-Data%>%
   group_by(Source, Station)%>%
-  summarize(Detection_prop=length(which(CPUE>0))/n())%>%
-  ungroup()%>%
+  summarize(Detection_prop=length(which(CPUE>0))/n(), .groups="drop")%>%
   filter(Detection_prop>1/12)
 
 Data2<-Data%>%
@@ -122,6 +128,10 @@ m225 <- bam(CPUE^(1/3) ~ te(Julian_day_s, Year_fac, Station_fac, bs=c("cc", "re"
 
 # CPUE^(1/3), 3D smooth with julian day, factor year, and factor station, tw family
 m226 <- bam(CPUE^(1/3) ~ te(Month, Year, by=Station_fac, bs=c("cc", "tp"), k=c(5,39)), select=T, family=tw, data=Data2, method="fREML", discrete=F, nthreads=4, knots=list(Month = c(0.5, 12.5)))
+
+# CPUE^(1/3), 3D smooth with julian day, factor year, and factor station, tw family
+m227 <- bam(as.integer(round(Count)) ~ Tow_area_s + t2(Year_s, Month, Station_fac, bs=c("tp", "cc", "re"), k=c(42,6,5)),
+            family=poisson, select=T, data=Data, method="fREML", discrete=T, nthreads=4, knots=list(Month = c(0.5, 12.5)), gc.level = 2)
 
 fit_plot<-function(model, X, title, subtitle, type="fit"){
   if(type=="fit"){
@@ -235,11 +245,18 @@ mbrm<-brm(as.integer(round(Count)) ~ offset(Tow_area_s) + (1|Year) + (1|Month) +
           iter = iterations, warmup = warmup)
 
 mbrmb<-brm(as.integer(round(Count)) ~ Tow_area_s + (1|Year) + (1|Month) + (1|Station),
-          family=negbinomial, data=Data2,
-          prior=prior(normal(0,10), class="Intercept")+
-            prior(cauchy(0,5), class="sd"),
-          chains=1, cores=1,
-          iter = iterations, warmup = warmup)
+           family=negbinomial, data=Data2,
+           prior=prior(normal(0,10), class="Intercept")+
+             prior(cauchy(0,5), class="sd"),
+           chains=1, cores=1,
+           iter = iterations, warmup = warmup)
+
+mbrmc<-brm(as.integer(round(Count)) ~ Tow_area_s + (1|Year) + (1|Month) + (1|Station),
+           family=poisson, data=Data,
+           prior=prior(normal(0,10), class="Intercept")+
+             prior(cauchy(0,5), class="sd"),
+           chains=1, cores=1,
+           iter = iterations, warmup = warmup)
 
 mbrm2<-brm(as.integer(round(Count)) ~ offset(Tow_area_s) + (1|Year/Month/Station),
            family=negbinomial, data=Data2,
@@ -249,11 +266,11 @@ mbrm2<-brm(as.integer(round(Count)) ~ offset(Tow_area_s) + (1|Year/Month/Station
            iter = iterations, warmup = warmup)
 
 mbrm2b<-brm(as.integer(round(Count)) ~ Tow_area_s + (1|Year/Month/Station),
-           family=negbinomial, data=Data2,
-           prior=prior(normal(0,10), class="Intercept")+
-             prior(cauchy(0,5), class="sd"),
-           chains=1, cores=1,
-           iter = iterations, warmup = warmup)
+            family=negbinomial, data=Data2,
+            prior=prior(normal(0,10), class="Intercept")+
+              prior(cauchy(0,5), class="sd"),
+            chains=1, cores=1,
+            iter = iterations, warmup = warmup)
 
 mbrm2c<-brm(as.integer(round(Count)) ~ Tow_area_s + (1|Year/Month/Station),
             family=negbinomial, data=Data,
@@ -263,20 +280,176 @@ mbrm2c<-brm(as.integer(round(Count)) ~ Tow_area_s + (1|Year/Month/Station),
             iter = iterations, warmup = warmup)
 
 mbrm2d<-brm(as.integer(round(Count)) ~ Tow_area_s + (1|Year/Month/Station),
+            family=poisson, data=Data2,
+            prior=prior(normal(0,10), class="Intercept")+
+              prior(cauchy(0,5), class="sd"),
+            chains=1, cores=1,
+            iter = iterations, warmup = warmup)
+
+mbrm2e<-brm(as.integer(round(Count)) ~ Tow_area_s + (1|Year/Month/Station),
             family=poisson, data=Data,
             prior=prior(normal(0,10), class="Intercept")+
               prior(cauchy(0,5), class="sd"),
             chains=1, cores=1,
             iter = iterations, warmup = warmup)
 
-mbrm3<-brm(as.integer(round(Count)) ~ Tow_area_s + (1|Year/Month/Station),
-            family=hurdle_negbinomial, data=Data2,
+Years<-Data%>%
+  group_by(Year_fac)%>%
+  summarise(n_Months=length(unique(Month_fac)))%>%
+  ungroup()%>%
+  filter(n_Months==12)
+
+m3<-glmer(as.integer(round(Count)) ~ Tow_area_s + Year_fac + (1|Station_fac/Month_fac), family=poisson, 
+          data=filter(Data, Year_fac%in%Years$Year_fac), control=glmerControl(optimizer = "bobyqa"))
+
+m4<-glmer(as.integer(round(Count)) ~ Tow_area_s + Year_fac + (1|Station_fac) + (1|ID), family=poisson, 
+          data=filter(Data, Year_fac%in%Years$Year_fac), control=glmerControl(optimizer = "bobyqa"))
+
+mbrm3<-brm(as.integer(round(Count)) ~ Tow_area_s + Year_fac + (1|Station_fac/Month_fac),
+           family=poisson, data=Data,
+           prior=prior(normal(0,10), class="Intercept")+
+             prior(cauchy(0,5), class="sd"),
+           chains=1, cores=1,
+           iter = iterations, warmup = warmup)
+
+mbrm4<-brm(as.integer(round(Count)) ~ Tow_area_s + Year_fac + (1|Station_fac) + (1|ID),
+           family=poisson, data=Data,
+           prior=prior(normal(0,10), class="Intercept")+
+             prior(cauchy(0,5), class="sd"),
+           chains=1, cores=1,
+           iter = iterations, warmup = warmup)
+
+mbrm4b<-brm(as.integer(round(Count)) ~ -1 + Tow_area_s + Year_fac + (1|Station_fac) + (1|ID),
+           family=poisson, data=Data,
+           prior=prior(cauchy(0,5), class="sd"),
+           chains=1, cores=1,
+           iter = iterations, warmup = warmup)
+
+mbrm5<-brm(as.integer(round(Count)) ~ Tow_area_s + Year_fac + (1|Station_fac) + (1|ID) +ar(time=Date, gr=Station_fac),
+           family=poisson, data=Data,
+           prior=prior(normal(0,10), class="Intercept")+
+             prior(cauchy(0,5), class="sd"),
+           chains=1, cores=1,
+           iter = iterations, warmup = warmup)
+
+mbrm6<-brm(as.integer(round(Count)) ~ Tow_area_s + Year_fac + (1|Station_fac) + (1|ID) +ar(time=Date, gr=Station_fac),
+           family=poisson, data=Data,
+           prior=prior(normal(0,10), class="Intercept")+
+             prior(cauchy(0,5), class="sd"),
+           chains=1, cores=1,
+           iter = iterations, warmup = warmup)
+
+mbrm7<-brm(as.integer(round(Count)) ~ Tow_area_s + Year_fac*Season + (1|Station_fac) + (1|ID),
+           family=poisson, data=Data,
+           prior=prior(normal(0,10), class="Intercept")+
+             prior(normal(0,5), class="b")+
+             prior(cauchy(0,5), class="sd"),
+           chains=1, cores=1,
+           iter = iterations, warmup = warmup)
+mbrm7<-add_criterion(mbrm7, c("loo", "waic"))
+mbrm7<-add_criterion(mbrm7, c("kfold"))
+
+mbrm7b<-brm(as.integer(round(Count)) ~ Tow_area_s + Year_fac*Season + (1|Station_fac) + (1|ID) +ar(time=Date, gr=Station_fac, cov=T),
+           family=poisson, data=Data,
+           prior=prior(normal(0,10), class="Intercept")+
+             prior(normal(0,5), class="b")+
+             prior(cauchy(0,5), class="sd"),
+           chains=1, cores=1,
+           iter = iterations, warmup = warmup)
+mbrm7b<-add_criterion(mbrm7b, c("loo", "waic"))
+mbrm7b<-add_criterion(mbrm7b, c("kfold"))
+
+mbrm7c<-brm(as.integer(round(Count)) ~ Tow_area_s + Year_fac*Season + Source+ (1|Station_fac) + (1|ID),
+            family=poisson, data=Data,
             prior=prior(normal(0,10), class="Intercept")+
+              prior(normal(0,5), class="b")+
               prior(cauchy(0,5), class="sd"),
             chains=1, cores=1,
             iter = iterations, warmup = warmup)
+mbrm7c<-add_criterion(mbrm7c, c("loo", "waic"))
+mbrm7c<-add_criterion(mbrm7c, c("kfold"))
+
+mbrm7d<-brm(as.integer(round(Count)) ~ Tow_area_s + Year_fac*Season + (1|Station_fac) + (1|ID) +(1|Source),
+            family=poisson, data=Data,
+            prior=prior(normal(0,10), class="Intercept")+
+              prior(normal(0,5), class="b")+
+              prior(cauchy(0,5), class="sd"),
+            chains=1, cores=1,
+            iter = 1e4, warmup = 2.5e3)
+mbrm7d<-add_criterion(mbrm7d, c("loo", "waic"))
+mbrm7d<-add_criterion(mbrm7d, c("kfold"))
+# Can't fit 2-level random intercept, it doesn't fit well
+
+mbrm8<-brm(as.integer(round(Count)) ~ Tow_area_s + Year_fac*Season + (1|Station_fac),
+           family=poisson, data=Data,
+           prior=prior(normal(0,10), class="Intercept")+
+             prior(normal(0,5), class="b")+
+             prior(cauchy(0,5), class="sd"),
+           chains=1, cores=1,
+           iter = iterations, warmup = warmup)
+mbrm8<-add_criterion(mbrm8, c("loo", "waic"))
+mbrm8<-add_criterion(mbrm8, c("kfold"))
+
+mbrm9<-brm(as.integer(round(Count)) ~ Tow_area_s + Year_fac*Season + (1|Station_fac),
+           family=negbinomial, data=Data,
+           prior=prior(normal(0,10), class="Intercept")+
+             prior(normal(0,5), class="b")+
+             prior(cauchy(0,5), class="sd"),
+           chains=1, cores=1,
+           iter = iterations, warmup = warmup)
+mbrm9<-add_criterion(mbrm9, c("loo", "waic"))
+mbrm9<-add_criterion(mbrm9, c("kfold"))
+
+mbrm10<-brm(as.integer(round(Count)) ~ Tow_area_s + Year_fac + s(Latitude, Longitude, by=Year_fac) + (1|ID),
+           family=poisson, data=Data,
+           prior=prior(normal(0,10), class="Intercept")+
+             prior(normal(0,5), class="b")+
+             prior(cauchy(0,5), class="sd"),
+           chains=1, cores=1,
+           iter = iterations, warmup = warmup)
+
+#Poisson better than negbinom which is better than hurdle_negbinom
+#With Poisson, using full dataset looks better than trimmed dataset to stations where fish commonly caught
 
 
+# autocorrelation ---------------------------------------------------------
+
+auto<-Data%>%
+  mutate(Resid=residuals(mbrm7)[,1])%>%
+  mutate(Station=paste(Source, Station))%>%
+  group_by(Station)%>%
+  mutate(N=n())%>%
+  filter(N>10)%>%
+  summarise(ACF=list(pacf(Resid, plot=F)), N=n(), ci=qnorm((1 + 0.95)/2)/sqrt(n()), .groups="drop")%>% # ci formula from https://stackoverflow.com/questions/14266333/extract-confidence-interval-values-from-acf-correlogram
+  arrange(-N) 
+  
+auto_sum<-auto%>%  
+  rowwise()%>%
+  mutate(lag=list(ACF$lag), acf=list(ACF$acf))%>%
+  unnest(cols=c(lag, acf))%>%
+  arrange(-N)%>%
+  mutate(Station=factor(Station, levels=unique(Station)))
+
+length(which(abs(auto_sum$acf)>abs(auto_sum$ci)))/nrow(auto_sum)
+
+ggplot(filter(auto_sum, lag==1))+
+  geom_point(aes(x=Station, y=abs(acf)), fill="black", shape=21)+
+  geom_point(data=filter(auto_sum, lag==1 & abs(acf)>abs(ci)), aes(x=Station, y=abs(acf)), fill="red", shape=21)+
+  geom_point(aes(x=Station, y=abs(ci)), fill="white", shape=21)+
+  geom_segment(aes(x=Station, y=abs(acf), xend=Station, yend=abs(ci)), linetype=2)+
+  geom_segment(data=filter(auto_sum, lag==1 & abs(acf)>abs(ci)), aes(x=Station, y=abs(acf), xend=Station, yend=abs(ci)), color="red")+
+  theme_bw()+
+  theme(panel.grid=element_blank(), axis.text.x=element_text(angle=45, hjust=1))
+
+ggplot(filter(auto_sum, lag%in%c(1:4)))+
+  geom_point(aes(x=Station, y=abs(acf)), fill="black", shape=21)+
+  geom_point(data=filter(auto_sum, lag%in%c(1:4) & abs(acf)>abs(ci)), aes(x=Station, y=abs(acf)), fill="red", shape=21)+
+  geom_point(aes(x=Station, y=abs(ci)), fill="white", shape=21)+
+  geom_segment(aes(x=Station, y=abs(acf), xend=Station, yend=abs(ci)), linetype=2)+
+  geom_segment(data=filter(auto_sum, lag%in%c(1:4) & abs(acf)>abs(ci)), aes(x=Station, y=abs(acf), xend=Station, yend=abs(ci)), color="red")+
+  facet_wrap(~lag)+
+  theme_bw()+
+  theme(panel.grid=element_blank(), axis.text.x=element_text(angle=45, hjust=1))
 
 # Including length --------------------------------------------------------
 
@@ -394,3 +567,34 @@ m3<-gam(CPUE ~ s(Year) + s(Station_fac, bs="re"), data=Data_ag2, family=gaussian
 m3.2<-gam(CPUE ~ s(Year) + s(Station_fac, bs="re"), data=Data_ag2, family=tw)
 
 m3.3<-gam(CPUE ~ s(Year) + s(Station_fac, bs="re"), data=Data_ag2, family=scat)
+
+
+# Station distance --------------------------------------------------------
+
+require(geoR)
+require(corpcor)
+require(sf)
+require(spacetools)
+Delta<-spacetools::Delta
+Station_locs <- LTMRpilot(convert_lengths=TRUE, remove_unconverted_lengths = TRUE, size_cutoff=40)%>%
+  zero_fill(species="Pogonichthys macrolepidotus", remove_unknown_lengths = TRUE, univariate = TRUE)%>%
+  filter(Method=="Otter trawl" & year(Date)>=1980 & year(Date)<=2019)%>%
+  select(Latitude, Longitude, Station)%>%
+  drop_na()%>%
+  distinct()
+
+Delta_transitioned <- spacetools::Maptransitioner(Water_map=spacetools::Delta, Plot=T)
+
+#Get in-water distance between stations
+distance <- Waterdist(Water_map=Delta, Points=Station_locs, Latitude_column=Latitude, 
+                      Longitude_column=Longitude, PointID_column=Station, Water_map_transitioned = Delta_transitioned)
+distance2<-distance/max(distance)
+distance_cov <-cov.spatial(distance2, cov.pars=c(1,2))
+distance_cov <- make.positive.definite(distance_cov)
+
+mbrm6b<-brm(as.integer(round(Count)) ~ -1 + Tow_area_s + Year_fac + (1|gr(Station_fac, cov=spat_cov)) + (1|ID),
+           family=poisson, data=Data, data2=list(spat_cov=distance_cov),
+           prior=prior(normal(0,5), class="b")+
+             prior(cauchy(0,5), class="sd"),
+           chains=1, cores=1,
+           iter = iterations, warmup = warmup)
