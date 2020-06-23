@@ -3,10 +3,10 @@ require(dplyr)
 require(ggplot2)
 require(tidyr)
 
-newdata<-expand.grid(Tow_area_s=0,  Year_fac=factor(1980:2019), Season=c("Winter", "Spring", "Summer", "Fall"), scale='response')
+newdata<-expand.grid(Tow_area_s=0,  Year_fac=factor(1980:2019), Season=c("Winter", "Spring", "Summer", "Fall"))
 
 pred_full<-fitted(mbrm7, newdata = newdata, re_formula=NA)
-pred_full2<-fitted(mbrm7, newdata = newdata, re_formula=NA, summary=F)
+pred_fullb<-fitted(mbrm7, newdata = newdata, re_formula=NA, summary=F)
 
 mbrm7_test<-brm(as.integer(round(Count)) ~ Tow_area_s + Year_fac*Season + (1|Station_fac) + (1|ID),
                 family=poisson, data=filter(Data, Station_fac%in%sample(unique(Station_fac), 60)),
@@ -85,3 +85,135 @@ ggplot(newdata_diff)+
   scale_fill_viridis_c(labels=scales::percent, name="Change in SD")+
   coord_cartesian(expand=0)+
   theme(text=element_text(size=18))
+
+
+# Using change in abundance -----------------------------------------------
+Posterior_differ<-function(model, newdata, name){
+  pred<-fitted(model, newdata = newdata, re_formula=NA, summary=F)
+  col_names<-set_names(c("Pred", "Pred_lag", "Pred_change"), paste0(name, c("", "_lag", "_change")))
+  out<-newdata%>%
+    mutate(Row=row_number(),
+           Year=as.numeric(as.character(Year_fac)))%>%
+    rowwise()%>%
+    mutate(Pred=list(pred[,Row]))%>%
+    ungroup()%>%
+    group_by(Season)%>%
+    mutate(Pred_lag=lag(Pred, order_by=Year))%>%
+    filter(Year!=min(Year))%>%
+    ungroup()%>%
+    rowwise()%>%
+    mutate(Pred_change=list(Pred_lag-Pred))%>%
+    rename(!!!col_names)%>%
+    mutate(across(all_of(c(names(col_names))), list(mean=mean, sd=sd)))%>%
+    ungroup()%>%
+    select(-all_of(names(col_names)), -Row, -Tow_area_s, -Year_fac)
+}
+
+Change<-Posterior_differ(mbrm7, newdata, "Full")%>%
+  left_join(Posterior_differ(mbrm7_test, newdata, "Reduced1"), by=c("Season", "Year"))%>%
+  left_join(Posterior_differ(mbrm7_test2, newdata, "Reduced2"), by=c("Season", "Year"))%>%
+  mutate(across(c(Reduced1_change_mean, Reduced2_change_mean), list(diff=~.x-Full_change_mean)))%>%
+  mutate(across(c(Reduced1_change_sd, Reduced2_change_sd), list(diff=~.x-Full_change_sd)))
+
+ggplot(filter(Change, Year>1985))+
+  geom_tile(aes(x=Year, y=Season, fill=Reduced2_change_mean_diff))+
+  scale_fill_gradient2(name="Change in \npredicted value")+
+  coord_cartesian(expand=0)+
+  theme(text=element_text(size=18))
+
+Change_plot<-Change%>%
+  select(Year, Season, Reduced1_change_mean, Reduced2_change_mean, Full_change_mean, Reduced1_change_sd, Reduced2_change_sd, Full_change_sd)%>%
+  pivot_longer(cols=c(Reduced1_change_mean, Reduced2_change_mean, Full_change_mean, Reduced1_change_sd, Reduced2_change_sd, Full_change_sd),
+               names_to=c("Model","change", ".value"), names_sep="_")%>%
+  select(-change)
+
+ggplot(filter(Change_plot, Model%in%c("Full", "Reduced2") & Year>1982), aes(x=Year, y=mean, ymin=mean-sd, ymax=mean+sd, color=Model, fill=Model))+
+  geom_ribbon(alpha=0.2)+
+  geom_line()+
+  geom_hline(yintercept=0)+
+  scale_y_continuous(expand=expansion(0,0))+
+  facet_wrap(~Season)+
+  scale_fill_discrete(labels=c("Full", "Reduced"), aesthetics = c("colour", "fill"))+
+  ylab("'Population' change from prior year")+
+  theme_bw()+
+  theme(panel.grid=element_blank(), text=element_text(size=18), legend.position=c(0.6, 0.9), legend.background = element_rect(color="black"))
+
+# Using tidybayes ---------------------------------------------------------
+
+
+Effort<-Data%>%group_by(Season, Year)%>%summarise(N=n(), .groups="drop")
+
+Post_data<-newdata%>%
+  mutate(Year=as.numeric(as.character(Year_fac)))%>%
+  filter(Year>=1985)%>%
+  add_fitted_draws(mbrm7, re_formula=NA, scale="response")%>%
+  ungroup()%>%
+  mutate(Model="Full",
+         Mean=mean(.value))%>%
+  group_by(Season, .draw)%>%
+  mutate(Lag=lag(.value, order_by=Year))%>%
+  mutate(Change=(.value-Lag)/(Mean),
+         Change2=(.value-Lag)/(.value+Lag))%>%
+  ungroup()%>%
+  filter(Year!=min(Year))%>%
+  bind_rows(newdata%>%
+              mutate(Year=as.numeric(as.character(Year_fac)))%>%
+              filter(Year>=1985)%>%
+              add_fitted_draws(mbrm7_test, re_formula=NA, scale="response")%>%
+              ungroup()%>%
+              mutate(Model="Reduced",
+                     Mean=mean(.value))%>%
+              group_by(Season, .draw)%>%
+              mutate(Lag=lag(.value, order_by=Year))%>%
+              mutate(Change=(.value-Lag)/(Mean),
+                     Change2=(.value-Lag)/(.value+Lag))%>%
+              ungroup()%>%
+              filter(Year!=min(Year))
+            
+  )%>%
+    left_join(Effort, by=c("Year", "Season"))
+  
+
+Intervals<-Post_data%>%
+  filter(Model=="Full")%>%
+  group_by(Season, Year, Year_fac)%>%
+  median_qi(Change2, .width = 0.95)%>%
+  select(Season, Year, Year_fac, .lower, .upper)%>%
+  ungroup()
+
+Post_data_probs<-Post_data%>%
+  filter(Model=="Reduced")%>%
+  left_join(Intervals, by=c("Year_fac", "Year", "Season"))%>%
+  mutate(IN=if_else(Change2 > .lower & Change2 <= .upper, 1, 0))%>%
+  group_by(Year, Year_fac, Season)%>%
+  summarise(N=n(), Prob=sum(IN)/N, .groups="drop")
+
+ggplot(Post_data)+
+  stat_slab(aes(x=Year_fac, y=Change2, fill = Model), alpha=0.5)+
+  geom_point(data=Post_data_probs2, aes(x=Year_fac, y=Prob))+
+  geom_hline(yintercept = c(-.1, .1), linetype = "dashed") +
+  facet_wrap(~Season)+
+  ylab("Change in abundance (Standardized by local magnitude)")+
+  xlab("Year")+
+  #coord_cartesian(ylim=c(-5,5))+
+  scale_x_discrete(breaks=unique(Post_data$Year), labels = if_else(unique(Post_data$Year)%% 2 == 0, as.character(unique(Post_data$Year)), ""))+
+  scale_fill_manual(values = c("gray80", "skyblue"), aesthetics = c("fill", "color"))+
+  theme_bw()+
+  theme(panel.grid=element_blank(), text=element_text(size=18), axis.text.x=element_text(angle=45, hjust=1))
+  
+ggplot(Post_data, aes(x=Year_fac, y=Change2, fill = Model))+
+  stat_slab(alpha=0.5)+
+  ylab("Change in abundance (F(t)-F(t-1))/(F(t)+F(t-1))")+
+  geom_hline(yintercept = c(-.1, .1), linetype = "dashed") +
+  facet_wrap(~Season)+
+  scale_x_discrete(breaks=unique(Post_data$Year), labels = if_else(unique(Post_data$Year)%% 2 == 0, as.character(unique(Post_data$Year)), ""))+
+  scale_fill_manual(values = c("gray80", "skyblue"), aesthetics = c("fill", "color"))+
+  theme_bw()+
+  theme(panel.grid=element_blank(), axis.text.x=element_text(angle=45, hjust=1))
+
+ggplot(Post_data_probs, aes(x=Year, y=Prob))+
+  geom_point()+
+  facet_wrap(~Season)+
+  scale_x_discrete(breaks=unique(Post_data_probs$Year), labels = if_else(unique(Post_data_probs$Year)%% 2 == 0, as.character(unique(Post_data_probs$Year)), ""))+
+  theme_bw()+
+  theme(panel.grid=element_blank(), axis.text.x=element_text(angle=45, hjust=1))

@@ -592,9 +592,23 @@ distance2<-distance/max(distance)
 distance_cov <-cov.spatial(distance2, cov.pars=c(1,2))
 distance_cov <- make.positive.definite(distance_cov)
 
-mbrm6b<-brm(as.integer(round(Count)) ~ -1 + Tow_area_s + Year_fac + (1|gr(Station_fac, cov=spat_cov)) + (1|ID),
-           family=poisson, data=Data, data2=list(spat_cov=distance_cov),
+mbrm7_spatial<-brm(as.integer(round(Count)) ~ Tow_area_s + Year_fac*Season + (1|Station_fac2) + (1|gr(Station_fac, cov=spat_cov)) + (1|ID),
+           family=poisson, data=Data%>%mutate(Station_fac2=Station_fac), data2=list(spat_cov=distance_cov),
            prior=prior(normal(0,5), class="b")+
              prior(cauchy(0,5), class="sd"),
            chains=1, cores=1,
            iter = iterations, warmup = warmup)
+
+mbrm7_spatial2<-brm(as.integer(round(Count)) ~ Tow_area_s + Year_fac*Season + s(Longitude, Latitude) + (1|ID),
+                    family=poisson, data=Data%>%mutate(Station_fac2=Station_fac), data2=list(spat_cov=distance_cov),
+                    prior=prior(normal(0,5), class="b")+
+                      prior(cauchy(0,5), class="sd"),
+                    chains=1, cores=1,
+                    iter = iterations, warmup = warmup)
+
+mbrm7_spatial3<-brm(as.integer(round(Count)) ~ Tow_area_s + Year_fac*Season + gp(longitude, latitude, gr = TRUE) + (1|ID),
+                   family=poisson, data=Data%>%mutate(Station_fac2=Station_fac), data2=list(spat_cov=distance_cov),
+                   prior=prior(normal(0,5), class="b")+
+                     prior(cauchy(0,5), class="sd"),
+                   chains=1, cores=1,
+                   iter = iterations, warmup = warmup)
