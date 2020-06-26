@@ -2,6 +2,7 @@ require(brms)
 require(dplyr)
 require(ggplot2)
 require(tidyr)
+require(tidybayes)
 
 newdata<-expand.grid(Tow_area_s=0,  Year_fac=factor(1980:2019), Season=c("Winter", "Spring", "Summer", "Fall"))
 
@@ -152,8 +153,8 @@ Post_data<-newdata%>%
          Mean=mean(.value))%>%
   group_by(Season, .draw)%>%
   mutate(Lag=lag(.value, order_by=Year))%>%
-  mutate(Change=(.value-Lag)/(Mean),
-         Change2=(.value-Lag)/(.value+Lag))%>%
+  mutate(Change_global=(.value-Lag)/(Mean),
+         Change_local=(.value-Lag)/(.value+Lag))%>%
   ungroup()%>%
   filter(Year!=min(Year))%>%
   bind_rows(newdata%>%
@@ -165,31 +166,31 @@ Post_data<-newdata%>%
                      Mean=mean(.value))%>%
               group_by(Season, .draw)%>%
               mutate(Lag=lag(.value, order_by=Year))%>%
-              mutate(Change=(.value-Lag)/(Mean),
-                     Change2=(.value-Lag)/(.value+Lag))%>%
+              mutate(Change_global=(.value-Lag)/(Mean),
+                     Change_local=(.value-Lag)/(.value+Lag))%>%
               ungroup()%>%
               filter(Year!=min(Year))
             
-  )%>%
-    left_join(Effort, by=c("Year", "Season"))
+  )
   
 
 Intervals<-Post_data%>%
   filter(Model=="Full")%>%
   group_by(Season, Year, Year_fac)%>%
-  median_qi(Change2, .width = 0.95)%>%
-  select(Season, Year, Year_fac, .lower, .upper)%>%
+  median_qi(Change_local, Change_global, .width = 0.95)%>%
+  select(Season, Year, Year_fac, Change_local.lower, Change_local.upper, Change_global.lower, Change_global.upper)%>%
   ungroup()
 
 Post_data_probs<-Post_data%>%
   filter(Model=="Reduced")%>%
   left_join(Intervals, by=c("Year_fac", "Year", "Season"))%>%
-  mutate(IN=if_else(Change2 > .lower & Change2 <= .upper, 1, 0))%>%
+  mutate(IN_global=if_else(Change_global > Change_global.lower & Change_global <= Change_global.upper, 1, 0),
+         IN_local=if_else(Change_local > Change_local.lower & Change_local <= Change_local.upper, 1, 0))%>%
   group_by(Year, Year_fac, Season)%>%
-  summarise(N=n(), Prob=sum(IN)/N, .groups="drop")
+  summarise(N=n(), Prob_global=sum(IN_global)/N, Prob_local=sum(IN_local)/N, .groups="drop")
 
 ggplot(Post_data)+
-  stat_slab(aes(x=Year_fac, y=Change2, fill = Model), alpha=0.5)+
+  stat_slab(aes(x=Year_fac, y=Change_local, fill = Model), alpha=0.5)+
   geom_point(data=Post_data_probs2, aes(x=Year_fac, y=Prob))+
   geom_hline(yintercept = c(-.1, .1), linetype = "dashed") +
   facet_wrap(~Season)+
@@ -197,11 +198,11 @@ ggplot(Post_data)+
   xlab("Year")+
   #coord_cartesian(ylim=c(-5,5))+
   scale_x_discrete(breaks=unique(Post_data$Year), labels = if_else(unique(Post_data$Year)%% 2 == 0, as.character(unique(Post_data$Year)), ""))+
-  scale_fill_manual(values = c("gray80", "skyblue"), aesthetics = c("fill", "color"))+
+  scale_fill_manual(values = c("dodgerblue3", "firebrick1"), aesthetics = c("fill", "color"))+
   theme_bw()+
   theme(panel.grid=element_blank(), text=element_text(size=18), axis.text.x=element_text(angle=45, hjust=1))
   
-ggplot(Post_data, aes(x=Year_fac, y=Change2, fill = Model))+
+ggplot(Post_data, aes(x=Year_fac, y=Change_local, fill = Model))+
   stat_slab(alpha=0.5)+
   ylab("Change in abundance (F(t)-F(t-1))/(F(t)+F(t-1))")+
   geom_hline(yintercept = c(-.1, .1), linetype = "dashed") +

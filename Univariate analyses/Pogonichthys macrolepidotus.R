@@ -33,7 +33,9 @@ Data <- LTMRpilot(convert_lengths=TRUE, remove_unconverted_lengths = TRUE, size_
            Month%in%c(9,10,11) ~ "Fall"
          ))%>%
   mutate_at(vars(Length, Longitude, Latitude, Year, Julian_day, Sal_surf, Temp_surf, Tow_area), list(s=~(.-mean(., na.rm=T))/sd(., na.rm=T)))%>% # Create centered and standardized versions of covariates
-  arrange(Date)
+  arrange(Date)%>%
+  filter(Year>=1985)%>% # Remove early years before Suisun survey was regular
+  droplevels()
 
 Stations<-Data%>%
   group_by(Source, Station)%>%
@@ -411,6 +413,15 @@ mbrm10<-brm(as.integer(round(Count)) ~ Tow_area_s + Year_fac + s(Latitude, Longi
 #Poisson better than negbinom which is better than hurdle_negbinom
 #With Poisson, using full dataset looks better than trimmed dataset to stations where fish commonly caught
 
+mbrm7_3<-brm(as.integer(round(Count)) ~ Tow_area_s + Year_fac*Season + (1|Station_fac) + (1|ID),
+             family=poisson, data=Data,
+             prior=prior(normal(0,5), class="Intercept")+
+               prior(normal(0,5), class="b")+
+               prior(cauchy(0,5), class="sd"),
+             chains=3, cores=3, control=list(max_treedepth=15),
+             iter = iterations, warmup = warmup)
+
+# There were 174 transitions after warmup that exceeded the maximum treedepth
 
 # autocorrelation ---------------------------------------------------------
 
