@@ -164,7 +164,8 @@ warn<-warnings()
 if(!is.null(warn)){
   save(warn, file=file.path(save_folder, paste0("Splittail 1 month cut warnings.Rds")), compress="xz")
 }
-rm(model1)
+
+# Need to finish these
 
 # Fit 2-month cut models
 for(i in 1:3){

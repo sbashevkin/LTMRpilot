@@ -52,7 +52,7 @@ newdata_plot<-newdata2%>%
   pivot_longer(cols=c(Full_pred, Full_SD, Full_l95, Full_u95, Test_pred, Test_SD, Test_l95, Test_u95, Test2_pred, Test2_SD, Test2_l95, Test2_u95),
                names_to=c("Model", ".value"), names_sep="_")
 
-ggplot(filter(newdata_plot, Model%in%c("Full", "Test2")), aes(x=Year, y=pred, ymin=l95, ymax=u95, color=Model, fill=Model))+
+ggplot(filter(newdata_plot, Model%in%c("Full", "Test2") & Year>=1985), aes(x=Year, y=pred, ymin=l95, ymax=u95, color=Model, fill=Model))+
   geom_ribbon(alpha=0.2)+
   geom_line()+
   scale_y_continuous(expand=expansion(0,0))+
@@ -60,7 +60,7 @@ ggplot(filter(newdata_plot, Model%in%c("Full", "Test2")), aes(x=Year, y=pred, ym
   scale_fill_discrete(labels=c("Full", "Reduced"), aesthetics = c("colour", "fill"))+
   ylab("Predicted value")+
   theme_bw()+
-  theme(panel.grid=element_blank(), text=element_text(size=18), legend.position=c(0.9, 0.9), legend.background = element_rect(color="black"))
+  theme(panel.grid=element_blank(), text=element_text(size=18), legend.position=c(0.1, 0.9), legend.background = element_rect(color="black"))
 
 
 ggplot(newdata_plot, aes(x=Year, y=pred, ymin=l95, ymax=u95, color=Model, fill=Model))+

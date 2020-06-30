@@ -56,38 +56,13 @@ Data_split<-Data%>%
 
 save(Data_split, file="Split data.Rds")
 
-# Code for 1/10 station split
+# Check reduced models
+model_diagnose<-function(model){
+  Bulk_ESS<-map_dbl(parnames(model)[-grep("^r_", parnames(model))], ~rstan::ess_bulk(as.array(model)[,,.x]))
+  Tail_ESS<-map_dbl(parnames(model)[-grep("^r_", parnames(model))], ~rstan::ess_tail(as.array(model)[,,.x]))
+  Rhat<-rhat(model, pars=parnames(model)[-grep("^r_", parnames(model))])
+  out<-tibble(Bulk_ESS, Tail_ESS, Rhat)
+  return(out)
+}
 
-# Enter the folder where you've saved the "Split data.Rds" file and where you would like the models saved
-save_folder<-"Univariate analyses"
-
-load(file.path(save_folder, "Split data.Rds"))
-
-iterations<-5e3
-warmup<-iterations/4
-N<-10
-
-# Fit first model so we only need to compile once
-model1<-brm(as.integer(round(Count)) ~ Tow_area_s + Year_fac*Season + (1|Station_fac) + (1|ID),
-           family=poisson, data=subset(Data_split, Group_10==1),
-           prior=prior(normal(0,5), class="Intercept")+
-             prior(normal(0,5), class="b")+
-             prior(cauchy(0,5), class="sd"),
-           chains=3, cores=3, control=list(max_treedepth=15),
-           iter = iterations, warmup = warmup)
-model<-model1 # Ensure all saved models have same name and model1 is not overwritten
-save(model, file=file.path(save_folder, paste0("Splittail ", 1/N, " station cut ", "1", " of ", N, ".Rds")), compress="xz")
-rm(model)
-gc()
-# Fit remaining models
-for(i in 2:N){
-  model<-update(model1, newdata=subset(Data_split, Group_10==i),
-                      chains=3, cores=3, control=list(max_treedepth=15),
-                      iter = iterations, warmup = warmup)
-  save(model, file=file.path(save_folder, paste0("Splittail ", 1/N, " station cut ", i, " of ", N, ".Rds")), compress="xz")
-  rm(model)
-  gc()
-}  
-warn<-warnings()
-save(warn, file=file.path(save_folder, paste0("Splittail ", 1/N, " station cut warnings.Rds")), compress="xz")
-rm(model1)
+# Should be at least 100 ESS per chain, Rhat <1.05
