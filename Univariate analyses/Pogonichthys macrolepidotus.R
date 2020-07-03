@@ -421,7 +421,15 @@ mbrm7_3<-brm(as.integer(round(Count)) ~ Tow_area_s + Year_fac*Season + (1|Statio
              chains=3, cores=3, control=list(max_treedepth=15),
              iter = iterations, warmup = warmup)
 
-# There were 174 transitions after warmup that exceeded the maximum treedepth
+
+model_var<-brm(as.integer(round(Count)) ~ Tow_area_s + (1|Year_fac) + (1|Season) + (1|Station_fac) + (1|ID),
+           family=poisson, data=Data_split,
+           prior=prior(normal(0,5), class="Intercept")+
+             prior(normal(0,5), class="b")+
+             prior(cauchy(0,5), class="sd"),
+           chains=3, cores=3,
+           iter = iterations, warmup = warmup)
+save(model_var, file=file.path("Univariate analyses", "Splittail models", "variance model.Rds"), compress="xz")
 
 # autocorrelation ---------------------------------------------------------
 

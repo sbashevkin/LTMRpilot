@@ -19,6 +19,16 @@ iterations<-5e3
 warmup<-iterations/4
 
 
+# Full model --------------------------------------------------------------
+
+model<-brm(as.integer(round(Count)) ~ Tow_area_s + Year_fac*Season + (1|Station_fac) + (1|ID),
+            family=poisson, data=Data_split,
+            prior=prior(normal(0,5), class="Intercept")+
+              prior(normal(0,5), class="b")+
+              prior(cauchy(0,5), class="sd"),
+            chains=3, cores=3, control=list(max_treedepth=15),
+            iter = iterations, warmup = warmup)
+save(model, file=file.path(save_folder, paste0("Splittail full model.Rds")), compress="xz")
 
 
 
@@ -164,8 +174,6 @@ warn<-warnings()
 if(!is.null(warn)){
   save(warn, file=file.path(save_folder, paste0("Splittail 1 month cut warnings.Rds")), compress="xz")
 }
-
-# Need to finish these
 
 # Fit 2-month cut models
 for(i in 1:3){

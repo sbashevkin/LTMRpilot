@@ -1,17 +1,28 @@
-Post_processor<-function(model, min_year=1985, model_name=NULL, Intervals=NULL){
-  out<-expand.grid(Tow_area_s=0,  Year_fac=factor(1980:2019), Season=c("Winter", "Spring", "Summer", "Fall"))%>%
+
+# Create posterior predictions and calculate change from one year to next within each season
+model_predictor<-function(model, max_year=2018){
+  out<-expand.grid(Tow_area_s=0,  Year_fac=factor(1985:max_year), Season=c("Winter", "Spring", "Summer", "Fall"))%>%
     mutate(Year=as.numeric(as.character(Year_fac)))%>%
-    filter(Year>=min_year)%>%
     add_fitted_draws(model, re_formula=NA, scale="response")%>%
     ungroup()%>%
-    mutate(Model=model_name,
-           Mean=mean(.value))%>%
+    mutate(Mean=mean(.value))%>%
     group_by(Season, .draw)%>%
     mutate(Lag=lag(.value, order_by=Year))%>%
     mutate(Change_global=(.value-Lag)/(Mean),
            Change_local=(.value-Lag)/(.value+Lag))%>%
     ungroup()%>%
-    filter(Year!=min(Year))%>%
+    filter(Year!=min(Year))
+  
+  return(out)
+}
+
+# For the full model, calculates the 95% intervals
+# For the reduced models, calculates the proportion of posterior samples within the 95% intervals of the full model
+# model_name = "Full", or "Reduced"
+# Intervals (i.e., output of this function when model_name="Full") should be supplied when model_name="Reduced"
+Post_processor<-function(model, max_year=2018, model_name=NULL, Intervals=NULL){
+  out<-model_predictor(model, max_year=max_year)%>%
+    mutate(Model=model_name)%>%
     {if(model_name=="Full"){
       group_by(., Season, Year, Year_fac)%>%
         median_qi(Change_local, Change_global, .width = 0.95)%>%
@@ -24,45 +35,91 @@ Post_processor<-function(model, min_year=1985, model_name=NULL, Intervals=NULL){
         group_by(Year, Year_fac, Season)%>%
         summarise(N=n(), Prob_global=sum(IN_global)/N, Prob_local=sum(IN_local)/N, .groups="drop")
     }}
- return(out) 
+  return(out) 
 }
 
-random_groups<-function(seed, N_total, N_groups){
-  set.seed(seed)
-  Groups<-rep(1:N_groups, floor(N_total/N_groups))
-  if(length(Groups)!=N_total){
-    Groups<-c(Groups, sample(1:N_groups, size=(N_total-length(Groups)), replace=F))
-  }
-  out<-sample(Groups, size=N_total, replace=F)
-  set.seed(NULL)
-  return(out)
-}
-
-Station_splits<-Data%>%
-  select(Station)%>%
-  distinct()%>%
-  mutate(Group_10=random_groups(12, nrow(.), 10),
-         Group_5=random_groups(123, nrow(.), 5),
-         Group_3=random_groups(1234, nrow(.), 3),
-         Group_2=random_groups(12345, nrow(.), 2))
-
-Data_split<-Data%>%
-  left_join(Station_splits, by="Station")%>%
-  mutate(Month_num=case_when(
-    Month%in%c(12,3,6,9) ~ 1,
-    Month%in%c(1,4,7,10) ~ 2,
-    Month%in%c(2,5,8,11) ~ 3,
-  ))
-
-save(Data_split, file="Split data.Rds")
-
-# Check reduced models
+# Check models for any diagnostic issues (Rhat and effective sample size)
+# ESS should be at least 100 per chain (300 total), Rhat should be <1.05.
 model_diagnose<-function(model){
-  Bulk_ESS<-map_dbl(parnames(model)[-grep("^r_", parnames(model))], ~rstan::ess_bulk(as.array(model)[,,.x]))
-  Tail_ESS<-map_dbl(parnames(model)[-grep("^r_", parnames(model))], ~rstan::ess_tail(as.array(model)[,,.x]))
-  Rhat<-rhat(model, pars=parnames(model)[-grep("^r_", parnames(model))])
-  out<-tibble(Bulk_ESS, Tail_ESS, Rhat)
-  return(out)
+  sum<-summary(model)
+  out<-tibble(par=c(names(sum$fixed[,1]), names(sum$random)), 
+              Bulk_ESS=c(sum$fixed[,"Bulk_ESS"], sum$random$ID[,"Bulk_ESS"], sum$random$Station_fac[,"Bulk_ESS"]),
+              Tail_ESS=c(sum$fixed[,"Tail_ESS"], sum$random$ID[,"Tail_ESS"], sum$random$Station_fac[,"Tail_ESS"]),
+              Rhat=c(sum$fixed[,"Rhat"], sum$random$ID[,"Rhat"], sum$random$Station_fac[,"Rhat"]))
+  Bulk_ESS<-filter(out, Bulk_ESS<300)%>%
+    pull(par)
+  Tail_ESS<-filter(out, Tail_ESS<300)%>%
+    pull(par)
+  Rhat<-filter(out, Rhat>1.05)%>%
+    pull(par)
+  
+  if(length(Bulk_ESS)>0){
+    message(paste("WARNING: Bulk_ESS is too low in the parameters:", paste(Bulk_ESS, collapse=", ")))
+  }
+  
+  if(length(Tail_ESS)>0){
+    message(paste("WARNING: Tail_ESS is too low in the parameters:", paste(Tail_ESS, collapse=", ")))
+  }
+  
+  if(length(Rhat)>0){
+    message(paste("WARNING: Rhat is too high in the parameters:", paste(Rhat, collapse=", ")))
+  }
+  
+  if(length(c(Bulk_ESS, Tail_ESS, Rhat)>0)){
+    return(out)
+  }else{
+    print("All good, no warnings!")
+  }
 }
 
-# Should be at least 100 ESS per chain, Rhat <1.05
+
+# Function to visualize posterior distributions and predictions
+# plot_type can be either "distributions" or "time series"
+# when plot_type="distributions", y should be supplied as either "Change_local" or "Change_global"
+
+Posterior_plotter<-function(model_full, model_reduced, plot_type, y=NULL, max_year=2018){
+  if(is.character(model_reduced)){
+    load(file.path("Univariate analyses", "Splittail models", model_reduced))
+    model_reduced<-model
+    rm(model)
+  }
+  
+  Data<-model_predictor(model_full, max_year=max_year)%>%
+    mutate(Model="Full")%>%
+    bind_rows(model_predictor(model_reduced, max_year=max_year)%>%
+    mutate(Model="Reduced"))
+  
+  if(plot_type=="distributions"){
+    p<-ggplot(Data)+
+      stat_slab(aes(x=Year_fac, y=.data[[y]], fill = Model), alpha=0.5)+
+      facet_wrap(~Season)+
+      ylab(paste0("Change in abundance ", if_else(y=="Change_local", "(Standardized by local magnitude)", "(Standardized by global mean)")))+
+      xlab("Year")+
+      {if(y=="Change_global"){
+        coord_cartesian(ylim=c(-5,5))
+      }}+
+      scale_x_discrete(breaks=unique(Data$Year), labels = if_else(unique(Data$Year)%% 2 == 0, as.character(unique(Data$Year)), ""))+
+      scale_fill_manual(values = c("dodgerblue3", "firebrick1"), aesthetics = c("fill", "color"))+
+      theme_bw()+
+      theme(panel.grid=element_blank(), text=element_text(size=18), axis.text.x=element_text(angle=45, hjust=1))
+  }
+  
+  if(plot_type=="time series"){
+    Data<-Data%>%
+      group_by(Season, Year, Year_fac, Model)%>%
+      mean_qi(.value)%>%
+      mutate(Model=factor(Model, levels=c("Full", "Reduced")))
+    
+    p<-ggplot(Data, aes(x=Year, y=.value, ymin=.lower, ymax=.upper, color=Model, fill=Model))+
+      geom_ribbon(alpha=0.2)+
+      geom_line()+
+      scale_y_continuous(expand=expansion(0,0))+
+      facet_wrap(~Season)+
+      scale_fill_manual(aesthetics = c("colour", "fill"), values = c("dodgerblue3", "firebrick1"))+
+      ylab("Predicted value")+
+      theme_bw()+
+      theme(panel.grid=element_blank(), text=element_text(size=18), legend.position=c(0.1, 0.9), legend.background = element_rect(color="black"))
+  }
+  
+  return(p) 
+}
