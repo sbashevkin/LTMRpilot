@@ -427,7 +427,7 @@ model_var<-brm(as.integer(round(Count)) ~ Tow_area_s + (1|Year_fac) + (1|Season)
            prior=prior(normal(0,5), class="Intercept")+
              prior(normal(0,5), class="b")+
              prior(cauchy(0,5), class="sd"),
-           chains=3, cores=3,
+           chains=3, cores=3, control=list(adapt_delta=0.99),
            iter = iterations, warmup = warmup)
 save(model_var, file=file.path("Univariate analyses", "Splittail models", "variance model.Rds"), compress="xz")
 
