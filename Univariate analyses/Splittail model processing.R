@@ -21,9 +21,27 @@ load("Univariate analyses/Split data.Rds")
 
 Months<-Data_split%>%
   filter(Year<=2018)%>%
-  group_by(Month_num, Year, Season, .drop=F)%>%
+  group_by(Month_num, Year, Season, .drop=FALSE)%>%
   summarise(N=n(), .groups="drop")%>%
-  filter(N<5)
+  complete(Month_num=1:3, Year=1985:2018, Season)%>%
+  filter(is.na(N))
+
+# Months not represented are:
+
+Season_removals<-Months%>%
+  mutate(Cut=2/3)%>%
+  rename(Replicate=Month_num)%>%
+  select(-N)%>%
+  bind_rows(Months%>%
+              group_by(Year, Season)%>%
+              mutate(N=n())%>%
+              ungroup()%>%
+              filter(N>1)%>%
+              group_by(Year, Season)%>%
+              summarise(Replicate=(1:3)[which(!1:3%in%unique(Month_num))], .groups="drop")%>%
+              mutate(Cut=1/3))%>%
+  mutate(Cut_type="Month",
+         Remove=T)
 
 # Reduced models ----------------------------------------------------------
 
@@ -48,6 +66,7 @@ Reduced_model_processor<- function(file){
 }
 
 Reduced_probs<-map(Reduced_models$File, Reduced_model_processor)
+# No Bulk_ESS, Tail_ESS, or Rhat issues from any models
 
 #save(Reduced_probs, Full_eval, file="Univariate analyses/Splittail model processing.Rds")
 
@@ -57,8 +76,11 @@ Reduced_probs_extracted<-map_dfr(1:nrow(Reduced_models), ~Reduced_probs[[.x]]$Re
                                           N_month=Reduced_models$N_month[.x]))%>%
   mutate(Cut_type=if_else(is.na(N_station), "Month", "Station"),
          Cut=if_else(Cut_type=="Month", (3-N_month)/3, 1/N_station))%>%
-  select(-N_station, -N_month, -N)
-# No Bulk_ESS, Tail_ESS, or Rhat issues from any models
+  select(-N_station, -N_month, -N)%>%
+  left_join(Season_removals, by=c("Year", "Season", "Replicate", "Cut", "Cut_type"))%>%
+  mutate(Remove=replace_na(Remove, FALSE))%>%
+  mutate(across(c(Prob_global, Prob_local), ~if_else(Remove, NA_real_, .x)))%>%
+  select(-Remove)
 
 # How much do the replicates differ?
 p_rep<-ggplot(Reduced_probs_extracted, aes(x=Year, y=Prob_local, color=as.factor(Replicate), group=Replicate))+
@@ -113,4 +135,4 @@ p_points<-ggplot(Reduced_probs_season, aes(x=Season, y=Prob_local_mean, ymin=Pro
 ggsave(p_points, file="Univariate analyses/Figures/Splittail reduced model summarized.png", device="png", units="in", width=4, height=4)
 
 # TODO
-# 1) For month cuts, remove season x year combos not present in reducd datasets
+# 1) For month cuts, remove season x year combos not present in reduced datasets

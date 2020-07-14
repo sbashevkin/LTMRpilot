@@ -123,3 +123,32 @@ Posterior_plotter<-function(model_full, model_reduced, plot_type, y=NULL, max_ye
   
   return(p) 
 }
+
+Distribution_plotter<-function(Full_post, Reduced_post, Y){
+  Data<-bind_rows(Full_post%>%
+                    mutate(Model="Full"),
+                  Reduced_post%>%
+                    mutate(Model="Reduced"))
+  
+  if(Y=="Change_local"){
+    ylims<-c(-1,1)
+  } else{
+    ylims<-Data%>%
+      group_by(Model, Season, Year)%>%
+      summarise(L99=quantile(.data[[Y]], probs=0.025), U99=quantile(.data[[Y]], probs=0.975), .groups="drop")
+    
+    ylims=c(min(ylims$L99), max(ylims$U99))
+  }
+  
+  p<-ggplot(Data, aes(x=Year_fac, y=.data[[Y]], fill = Model))+
+    stat_slab(alpha=0.5)+
+    geom_hline(yintercept = 0, linetype = "dashed") +
+    coord_cartesian(ylim=ylims)+
+    facet_wrap(~Season)+
+    scale_x_discrete(breaks=unique(Data$Year), labels = if_else(unique(Data$Year)%% 2 == 0, as.character(unique(Data$Year)), ""))+
+    scale_fill_manual(values = c("gray80", "skyblue"), aesthetics = c("fill", "color"))+
+    theme_bw()+
+    theme(panel.grid=element_blank(), axis.text.x=element_text(angle=45, hjust=1))
+  
+  return(p)
+}

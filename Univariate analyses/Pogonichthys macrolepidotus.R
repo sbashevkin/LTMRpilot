@@ -436,6 +436,7 @@ save(model_var, file=file.path("Univariate analyses", "Splittail models", "varia
 auto<-Data%>%
   mutate(Resid=residuals(mbrm7)[,1])%>%
   mutate(Station=paste(Source, Station))%>%
+  arrange(Date)%>%
   group_by(Station)%>%
   mutate(N=n())%>%
   filter(N>10)%>%
