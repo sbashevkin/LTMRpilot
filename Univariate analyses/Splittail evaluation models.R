@@ -146,6 +146,37 @@ if(!is.null(warn)){
 rm(model1)
 
 
+# 67% (2/3) station cuts --------------------------------------------------------
+
+N<-3
+
+# Fit first model so we only need to compile once
+model1<-brm(as.integer(round(Count)) ~ Tow_area_s + Year_fac*Season + (1|Station_fac) + (1|ID),
+            family=poisson, data=subset(Data_split, Group_2.3==1),
+            prior=prior(normal(0,5), class="Intercept")+
+              prior(normal(0,5), class="b")+
+              prior(cauchy(0,5), class="sd"),
+            chains=3, cores=3, control=list(max_treedepth=15),
+            iter = iterations, warmup = warmup)
+model<-model1 # Ensure all saved models have same name and model1 is not overwritten
+save(model, file=file.path(save_folder, paste0("Splittail ", 2/N, " station cut ", "1", " of ", N, ".Rds")), compress="xz")
+rm(model)
+gc()
+
+# Fit remaining models
+for(i in 2:N){
+  model<-update(model1, newdata=subset(Data_split, Group_2.3==i),
+                chains=3, cores=3, control=list(max_treedepth=15),
+                iter = iterations, warmup = warmup)
+  save(model, file=file.path(save_folder, paste0("Splittail ", 2/N, " station cut ", i, " of ", N, ".Rds")), compress="xz")
+  rm(model)
+  gc()
+}  
+warn<-warnings()
+if(!is.null(warn)){
+  save(warn, file=file.path(save_folder, paste0("Splittail ", 2/N, " station cut warnings.Rds")), compress="xz")
+}
+
 # 1 & 2 month cuts (MIKE?)------------------------------------------------------------
 
 # Fit first model so we only need to compile once

@@ -54,7 +54,8 @@ Station_splits<-Data%>%
   mutate(Group_10=random_groups(12, nrow(.), 10),
          Group_5=random_groups(123, nrow(.), 5),
          Group_3=random_groups(1234, nrow(.), 3),
-         Group_2=random_groups(12345, nrow(.), 2))
+         Group_2=random_groups(12345, nrow(.), 2),
+         Group_2.3=random_groups(123456, nrow(.), 3)) # For 2/3 station cuts
 
 Data_split<-Data%>%
   left_join(Station_splits, by="Station")%>%

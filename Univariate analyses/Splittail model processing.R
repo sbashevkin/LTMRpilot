@@ -4,6 +4,7 @@ require(tidybayes)
 require(tibble)
 require(purrr)
 require(ggplot2)
+require(stringr)
 source("Univariate analyses/Survey assessment functions.R")
 
 # Full model -------------------------------------------------------------
@@ -97,7 +98,7 @@ ggsave(p_rep, file="Univariate analyses/Figures/Splittail reduced model replicat
 
 Reduced_probs_year<-Reduced_probs_extracted%>%
   group_by(Cut_type, Cut, Year, Season)%>%
-  summarise(across(c(Prob_global, Prob_local), list(mean=mean, sd=sd)), .groups="drop")
+  summarise(across(c(Prob_global, Prob_local), list(mean=mean, sd=sd), na.rm=T), .groups="drop")
 
 p_ribbon<-ggplot(Reduced_probs_year, aes(x=Year, y=Prob_local_mean, fill=Cut, 
                                          shape=Cut_type, group=interaction(Cut,Cut_type)))+
@@ -117,12 +118,29 @@ ggsave(p_ribbon, file="Univariate analyses/Figures/Splittail reduced model ribbo
 
 Reduced_probs_season<-Reduced_probs_extracted%>%
   group_by(Cut_type, Cut, Season)%>%
-  summarise(across(c(Prob_global, Prob_local), list(mean=mean, sd=sd)), .groups="drop")
+  summarise(across(c(Prob_global, Prob_local), list(mean=mean, sd=sd), na.rm=T), .groups="drop")
 
-p_points<-ggplot(Reduced_probs_season, aes(x=Season, y=Prob_local_mean, ymin=Prob_local_mean-Prob_local_sd, 
+p_points<-ggplot(Reduced_probs_season, aes(x=Cut, y=Prob_local_mean, ymin=Prob_local_mean-Prob_local_sd, 
                                  ymax=Prob_local_mean+Prob_local_sd, color=Cut, fill=Cut, 
                                  shape=Cut_type, group=interaction(Cut,Cut_type)))+
-  geom_pointrange(position=position_dodge(width=0.3), shape=21, color="black", size=0.3, stroke=0.3)+
+  geom_pointrange(color="black", size=0.3, stroke=0.3, position=position_dodge(width=0.05))+
+  facet_grid(~Season)+
+  scale_color_viridis_c(aesthetics = c("fill", "color"), name="Proportion removed", direction = -1,
+                        guide=guide_colorbar(barheight=0.5, title.position="top", title.hjust=0.5, direction="horizontal"))+
+  scale_y_continuous(expand=expansion(0,0), limits=c(0,1))+
+  scale_shape_manual(values=c(21, 24), guide=guide_legend())+
+  ylab("Proportional overlap")+
+  theme_bw()+
+  theme(strip.background=element_blank(), text=element_text(size=8), panel.spacing.y = unit(0.5, "lines"), legend.position = c(0.5, 1.08),
+        legend.margin=margin(0,0,0,0), legend.spacing=unit(0, "lines"), plot.margin = margin(40,0,0,0))
+
+ggsave(p_points, file="Univariate analyses/Figures/Splittail reduced model summarized.png", device="png", units="in", width=3, height=4)
+
+# Same plot with global prob
+p_points_global<-ggplot(Reduced_probs_season, aes(x=Season, y=Prob_global_mean, ymin=Prob_global_mean-Prob_global_sd, 
+                                 ymax=Prob_global_mean+Prob_global_sd, color=Cut, fill=Cut, 
+                                 shape=Cut_type, group=interaction(Cut,Cut_type)))+
+  geom_pointrange(position=position_dodge(width=0.5), shape=21, color="black", size=0.3, stroke=0.3)+
   facet_grid(Cut_type~.)+
   scale_color_viridis_c(aesthetics = c("fill", "color"), name="Proportion removed", direction = -1,
                         guide=guide_colorbar(barheight=0.5, title.position="top", title.hjust=0.5, direction="horizontal"))+
@@ -130,9 +148,38 @@ p_points<-ggplot(Reduced_probs_season, aes(x=Season, y=Prob_local_mean, ymin=Pro
   ylab("Proportional overlap")+
   theme_bw()+
   theme(strip.background=element_blank(), text=element_text(size=8), panel.spacing.y = unit(0.5, "lines"), legend.position = c(0.5, 1.08),
-        legend.margin=margin(0,0,0,0), legend.spacing=unit(0, "lines"), plot.margin = margin(30,0,0,0))
+        legend.margin=margin(0,0,0,0), legend.spacing=unit(0, "lines"), plot.margin = margin(40,0,0,0))
 
-ggsave(p_points, file="Univariate analyses/Figures/Splittail reduced model summarized.png", device="png", units="in", width=4, height=4)
+ggsave(p_points_global, file="Univariate analyses/Figures/Splittail reduced model summarized global.png", device="png", units="in", width=3, height=4)
 
-# TODO
-# 1) For month cuts, remove season x year combos not present in reduced datasets
+# Distribution plots ------------------------------------------------------
+
+Distributional_model_plotter<-function(file, Full_post){
+  file2<-str_remove(file, fixed(".Rds"))
+  load(file.path("Univariate analyses", "Splittail models", file))
+  Data<-model_predictor(model)
+  rm(model)
+  p<-Distribution_plotter(Full_post, Data, "Change_local")+
+    ylab("Local trend")
+  ggsave(p, file=paste0("Univariate analyses/Figures/Distribution plots/", file2, " local trend distribution.png"), device="png", units="in", width=4, height=4)
+  rm(p)
+  
+  p<-Distribution_plotter(Full_post, Data, ".value")+
+    ylab("Predicted count")
+  ggsave(p, file=paste0("Univariate analyses/Figures/Distribution plots/", file2, " predicted count distribution.png"), device="png", units="in", width=4, height=4)
+  rm(p)
+  
+  p<-Distribution_plotter(Full_post, Data, "Change_global")+
+    ylab("Global standardized trend")
+  ggsave(p, file=paste0("Univariate analyses/Figures/Distribution plots/", file2, " global standardized trend distribution.png"), device="png", units="in", width=4, height=4)
+  rm(p)
+  
+  return(message(paste("Finished:", file)))
+}
+
+load("~/LTMRpilot/Univariate analyses/Splittail models/Splittail full model.Rds")
+Full_post<-model_predictor(model)
+
+Distributional_model_plotter(Reduced_models$File[1], Full_post)
+
+map(Reduced_models$File, ~Distributional_model_plotter(.x, Full_post))

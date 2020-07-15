@@ -145,10 +145,12 @@ Distribution_plotter<-function(Full_post, Reduced_post, Y){
     geom_hline(yintercept = 0, linetype = "dashed") +
     coord_cartesian(ylim=ylims)+
     facet_wrap(~Season)+
-    scale_x_discrete(breaks=unique(Data$Year), labels = if_else(unique(Data$Year)%% 2 == 0, as.character(unique(Data$Year)), ""))+
-    scale_fill_manual(values = c("gray80", "skyblue"), aesthetics = c("fill", "color"))+
+    scale_x_discrete(breaks=seq(1985, 2020, by=5))+
+    scale_fill_manual(values = c("dodgerblue3", "firebrick1"), aesthetics = c("fill", "color"))+
+    xlab("Year")+
     theme_bw()+
-    theme(panel.grid=element_blank(), axis.text.x=element_text(angle=45, hjust=1))
+    theme(panel.grid=element_blank(), text=element_text(size=8), axis.text.x=element_text(angle=45, hjust=1), 
+          strip.background=element_blank(), legend.position="none")
   
   return(p)
 }
