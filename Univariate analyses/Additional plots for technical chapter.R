@@ -1,3 +1,7 @@
+
+# Simulation plots for diagrams -------------------------------------------
+
+
 Season_means<-Data%>%
   group_by(Season)%>%
   summarise(mean=mean(Count), .groups="drop")
@@ -57,3 +61,30 @@ p_overlay<-ggplot(filter(Data_sim, Simulation!="Sim_7_"), aes(x=Date, y=mean))+
   theme(panel.grid=element_blank(), strip.text = element_blank(), strip.background = element_blank(), axis.text=element_blank(), axis.ticks = element_blank())
 
 ggsave(p_overlay, file="Univariate analyses/Figures/Reduced_sim_overlay.png", device="png", height=3, width=2, units="in")
+
+
+# Splittail distribution plots --------------------------------------------
+require(sf)
+require(dplyr)
+require(ggplot2)
+
+load("Univariate analyses/Split data.Rds")
+
+Data_sum<-Data_split%>%
+  group_by(Station, Latitude, Longitude)%>%
+  summarise(Count=mean(CPUE)*mean(Tow_area))%>%
+  st_as_sf(coords=c("Longitude", "Latitude"), crs=4326)
+
+
+p_map<-ggplot()+
+  geom_sf(data=spacetools::Delta)+
+  geom_sf(data=Data_sum, aes(size=Count, fill=if_else(Count==0, "zero", "non-zero")), shape=21, alpha=0.5)+
+  coord_sf(xlim=c(-122.53, -121.5), ylim=c(37.4, 38.3))+
+  scale_fill_manual(values=c("firebrick3", "White"), guide="none")+
+  scale_size(breaks=c(0,5,10,15)/(max(Data_sum$Count)/5)+1, labels=c(0,5,10,15), name="Average catch\nper trawl",
+             guide=guide_legend(override.aes = list(size= c(0,5,10,15)/(max(Data_sum$Count)/5)+1, 
+                                                                         fill=c("white", rep("firebrick3", 3)))))+
+  theme_bw()+
+  theme(legend.position=c(0.85, 0.18), legend.background=element_rect(color="black"))
+
+ggsave(p_map, file="Univariate analyses/Figures/Splittail map.png", device="png", height=5, width=5, units="in")

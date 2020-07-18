@@ -1,3 +1,14 @@
+# Generate random groups in a repeatable manner 
+random_groups<-function(seed, N_total, N_groups){
+  set.seed(seed)
+  Groups<-rep(1:N_groups, floor(N_total/N_groups))
+  if(length(Groups)!=N_total){
+    Groups<-c(Groups, sample(1:N_groups, size=(N_total-length(Groups)), replace=F))
+  }
+  out<-sample(Groups, size=N_total, replace=F)
+  set.seed(NULL)
+  return(out)
+}
 
 # Create posterior predictions and calculate change from one year to next within each season
 model_predictor<-function(model, max_year=2018){
@@ -10,8 +21,7 @@ model_predictor<-function(model, max_year=2018){
     mutate(Lag=lag(.value, order_by=Year))%>%
     mutate(Change_global=(.value-Lag)/(Mean),
            Change_local=(.value-Lag)/(.value+Lag))%>%
-    ungroup()%>%
-    filter(Year!=min(Year))
+    ungroup()
   
   return(out)
 }
@@ -22,6 +32,7 @@ model_predictor<-function(model, max_year=2018){
 # Intervals (i.e., output of this function when model_name="Full") should be supplied when model_name="Reduced"
 Post_processor<-function(model, max_year=2018, model_name=NULL, Intervals=NULL){
   out<-model_predictor(model, max_year=max_year)%>%
+    filter(Year!=min(Year))%>%
     mutate(Model=model_name)%>%
     {if(model_name=="Full"){
       group_by(., Season, Year, Year_fac)%>%
@@ -130,19 +141,26 @@ Distribution_plotter<-function(Full_post, Reduced_post, Y){
                   Reduced_post%>%
                     mutate(Model="Reduced"))
   
+  if(Y%in%c("Change_local", "Change_global")){
+    Data<-Data%>%
+      filter(Year!=min(Year))
+  }
+  
   if(Y=="Change_local"){
     ylims<-c(-1,1)
   } else{
     ylims<-Data%>%
       group_by(Model, Season, Year)%>%
-      summarise(L99=quantile(.data[[Y]], probs=0.025), U99=quantile(.data[[Y]], probs=0.975), .groups="drop")
+      summarise(L95=quantile(.data[[Y]], probs=0.025), U95=quantile(.data[[Y]], probs=0.975), .groups="drop")
     
-    ylims=c(min(ylims$L99), max(ylims$U99))
+    ylims=c(min(ylims$L95), max(ylims$U95))
   }
   
   p<-ggplot(Data, aes(x=Year_fac, y=.data[[Y]], fill = Model))+
     stat_slab(alpha=0.5)+
-    geom_hline(yintercept = 0, linetype = "dashed") +
+    {if(Y%in%c("Change_local", "Change_global")){
+      geom_hline(yintercept = 0, linetype = "dashed")
+    }}+
     coord_cartesian(ylim=ylims)+
     facet_wrap(~Season)+
     scale_x_discrete(breaks=seq(1985, 2020, by=5))+
@@ -151,6 +169,38 @@ Distribution_plotter<-function(Full_post, Reduced_post, Y){
     theme_bw()+
     theme(panel.grid=element_blank(), text=element_text(size=8), axis.text.x=element_text(angle=45, hjust=1), 
           strip.background=element_blank(), legend.position="none")
+  
+  return(p)
+}
+
+Ribbon_plotter<-function(Full_post, Reduced_post, Y){
+  Data<-bind_rows(Full_post%>%
+                    mutate(Model="Full"),
+                  Reduced_post%>%
+                    mutate(Model="Reduced"))
+  
+  if(Y%in%c("Change_local", "Change_global")){
+    Data<-Data%>%
+      filter(Year!=min(Year))
+  }
+  
+  Data<-Data%>%
+    group_by(Model, Year, Year_fac, Season)%>%
+    summarise(Count=mean(.data[[Y]]), L95=quantile(.data[[Y]], probs=0.025), U95=quantile(.data[[Y]], probs=0.975), .groups="drop")
+  
+  p<-ggplot(Data, aes(x=Year, y=Count, ymin=L95, ymax=U95, fill = Model, group=Model))+
+    geom_ribbon(alpha=0.2)+
+    geom_line(aes(color=Model))+
+    {if(Y%in%c("Change_local", "Change_global")){
+      geom_hline(yintercept = 0, linetype = "dashed")
+    }}+
+    coord_cartesian(expand=0)+
+    facet_wrap(~Season, nrow=1)+
+    scale_x_continuous(breaks=seq(1985, 2020, by=5), limits=c(1985, 2018))+
+    scale_fill_manual(values = c("dodgerblue3", "firebrick1"), aesthetics = c("fill", "color"))+
+    xlab("Year")+
+    theme_bw()+
+    theme(text=element_text(size=8), axis.text.x=element_text(angle=45, hjust=1), strip.background=element_blank())
   
   return(p)
 }

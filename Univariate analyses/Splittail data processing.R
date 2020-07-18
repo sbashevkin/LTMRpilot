@@ -7,6 +7,7 @@ require(brms)
 require(gamm4)
 require(ggplot2)
 require(purrr)
+source("Univariate analyses/Survey assessment functions.R")
 
 Data <- LTMRpilot(convert_lengths=TRUE, remove_unconverted_lengths = TRUE, size_cutoff=40)%>%
   zero_fill(species="Pogonichthys macrolepidotus", remove_unknown_lengths = TRUE, univariate = TRUE)%>%
@@ -36,17 +37,6 @@ Data <- LTMRpilot(convert_lengths=TRUE, remove_unconverted_lengths = TRUE, size_
   arrange(Date)%>%
   filter(Year>=1985)%>% # Remove early years before Suisun survey was regular
   droplevels()
-
-random_groups<-function(seed, N_total, N_groups){
-  set.seed(seed)
-  Groups<-rep(1:N_groups, floor(N_total/N_groups))
-  if(length(Groups)!=N_total){
-    Groups<-c(Groups, sample(1:N_groups, size=(N_total-length(Groups)), replace=F))
-  }
-  out<-sample(Groups, size=N_total, replace=F)
-  set.seed(NULL)
-  return(out)
-}
 
 Station_splits<-Data%>%
   select(Station)%>%
