@@ -1,11 +1,17 @@
+require(dplyr)
+require(tidyr)
+require(lubridate)
+require(sf)
+require(ggplot2)
 
-# Simulation plots for diagrams -------------------------------------------
+# Simulation plots for conceptual diagrams -------------------------------------------
 
-
+# Calculate mean counts for each season
 Season_means<-Data%>%
   group_by(Season)%>%
   summarise(mean=mean(Count), .groups="drop")
 
+# Simulate time-series of fish counts for each year and season
 Data_sim<-expand.grid(Season=unique(Data$Season), Year=unique(Data$Year))%>%
   as_tibble()%>%
   left_join(Season_means, by="Season")%>%
@@ -29,6 +35,7 @@ Data_sim<-expand.grid(Season=unique(Data$Season), Year=unique(Data$Year))%>%
   Date=parse_date_time(paste(Month, "1", Year, sep="/"), "%m/%d/%Y"))%>%
   filter(Year>=2010)
 
+# Plot simulated reduced model outputs
 p_reduced_sim<-ggplot(filter(Data_sim, Simulation!="Sim_7_"), aes(x=Date, y=mean))+
   geom_ribbon(aes(ymin=mean-sd, ymax=mean+sd), alpha=0.3, fill="darkorange1")+
   geom_line(color="darkorange1")+
@@ -37,6 +44,7 @@ p_reduced_sim<-ggplot(filter(Data_sim, Simulation!="Sim_7_"), aes(x=Date, y=mean
   theme_bw()+
   theme(panel.grid=element_blank(), strip.text = element_blank(), strip.background = element_blank(), axis.text=element_blank(), axis.ticks = element_blank())
 
+# Plot simulated full model output
 p_full_sim<-ggplot(filter(Data_sim, Simulation=="Sim_7_"), aes(x=Date, y=mean))+
   geom_ribbon(aes(ymin=mean-sd, ymax=mean+sd), alpha=0.3, fill="dodgerblue3")+
   geom_line(color="dodgerblue3")+
@@ -48,8 +56,10 @@ ggsave(p_reduced_sim, file="Univariate analyses/Figures/Reduced_sim.png", device
 
 ggsave(p_full_sim, file="Univariate analyses/Figures/Full_sim.png", device="png", height=2, width=2, units="in")
 
+# Add full model to each reduced model for plotting
 Full_overlay<-map_dfr(1:6, ~filter(Data_sim, Simulation=="Sim_7_")%>%mutate(Simulation=paste0("Sim_", .x, "_")))
 
+# Plot overlay of each reduced model over the full model 
 p_overlay<-ggplot(filter(Data_sim, Simulation!="Sim_7_"), aes(x=Date, y=mean))+
   geom_ribbon(aes(ymin=mean-sd, ymax=mean+sd), alpha=0.3, fill="darkorange1")+
   geom_line(color="darkorange1")+
@@ -63,10 +73,9 @@ p_overlay<-ggplot(filter(Data_sim, Simulation!="Sim_7_"), aes(x=Date, y=mean))+
 ggsave(p_overlay, file="Univariate analyses/Figures/Reduced_sim_overlay.png", device="png", height=3, width=2, units="in")
 
 
-# Splittail distribution plots --------------------------------------------
-require(sf)
-require(dplyr)
-require(ggplot2)
+# Splittail distribution plot --------------------------------------------
+
+# Plot distribution of Splittail across the sampling stations
 
 load("Univariate analyses/Split data.Rds")
 

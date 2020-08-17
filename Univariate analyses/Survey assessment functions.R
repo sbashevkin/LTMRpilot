@@ -1,3 +1,6 @@
+# These functions require the dplyr, tidybayes, brms, tibble, ggplot2, ggdist packages
+# I'm not loading those packages here to avoid loading unecessary packages when sourcing this set of functions
+
 # Generate random groups in a repeatable manner 
 random_groups<-function(seed, N_total, N_groups){
   set.seed(seed)
@@ -83,57 +86,11 @@ model_diagnose<-function(model){
   }
 }
 
-
-# Function to visualize posterior distributions and predictions
-# plot_type can be either "distributions" or "time series"
-# when plot_type="distributions", y should be supplied as either "Change_local" or "Change_global"
-
-Posterior_plotter<-function(model_full, model_reduced, plot_type, y=NULL, max_year=2018){
-  if(is.character(model_reduced)){
-    load(file.path("Univariate analyses", "Splittail models", model_reduced))
-    model_reduced<-model
-    rm(model)
-  }
-  
-  Data<-model_predictor(model_full, max_year=max_year)%>%
-    mutate(Model="Full")%>%
-    bind_rows(model_predictor(model_reduced, max_year=max_year)%>%
-    mutate(Model="Reduced"))
-  
-  if(plot_type=="distributions"){
-    p<-ggplot(Data)+
-      stat_slab(aes(x=Year_fac, y=.data[[y]], fill = Model), alpha=0.5)+
-      facet_wrap(~Season)+
-      ylab(paste0("Change in abundance ", if_else(y=="Change_local", "(Standardized by local magnitude)", "(Standardized by global mean)")))+
-      xlab("Year")+
-      {if(y=="Change_global"){
-        coord_cartesian(ylim=c(-5,5))
-      }}+
-      scale_x_discrete(breaks=unique(Data$Year), labels = if_else(unique(Data$Year)%% 2 == 0, as.character(unique(Data$Year)), ""))+
-      scale_fill_manual(values = c("dodgerblue3", "firebrick1"), aesthetics = c("fill", "color"))+
-      theme_bw()+
-      theme(panel.grid=element_blank(), text=element_text(size=18), axis.text.x=element_text(angle=45, hjust=1))
-  }
-  
-  if(plot_type=="time series"){
-    Data<-Data%>%
-      group_by(Season, Year, Year_fac, Model)%>%
-      mean_qi(.value)%>%
-      mutate(Model=factor(Model, levels=c("Full", "Reduced")))
-    
-    p<-ggplot(Data, aes(x=Year, y=.value, ymin=.lower, ymax=.upper, color=Model, fill=Model))+
-      geom_ribbon(alpha=0.2)+
-      geom_line()+
-      scale_y_continuous(expand=expansion(0,0))+
-      facet_wrap(~Season)+
-      scale_fill_manual(aesthetics = c("colour", "fill"), values = c("dodgerblue3", "firebrick1"))+
-      ylab("Predicted value")+
-      theme_bw()+
-      theme(panel.grid=element_blank(), text=element_text(size=18), legend.position=c(0.1, 0.9), legend.background = element_rect(color="black"))
-  }
-  
-  return(p) 
-}
+# Plot posterior prediction distributions for each season and year
+# Requires full model output from Post_processor (Full_post), 
+# Reduced model output from Post_processor (Reduced_post),
+# and a choice of variable to plot on the Y-axis (Y)
+# Options for Y are "Change_local", "Change_global", or ".value" for the raw predictions
 
 Distribution_plotter<-function(Full_post, Reduced_post, Y){
   Data<-bind_rows(Full_post%>%
@@ -172,6 +129,12 @@ Distribution_plotter<-function(Full_post, Reduced_post, Y){
   
   return(p)
 }
+
+# Plot summarized posterior predictions for each season and year
+# Requires full model output from Post_processor (Full_post), 
+# Reduced model output from Post_processor (Reduced_post),
+# and a choice of variable to plot on the Y-axis (Y)
+# Options for Y are "Change_local", "Change_global", or ".value" for the raw predictions
 
 Ribbon_plotter<-function(Full_post, Reduced_post, Y){
   Data<-bind_rows(Full_post%>%

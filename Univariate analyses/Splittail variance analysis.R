@@ -6,11 +6,15 @@ require(purrr)
 require(dplyr)
 require(ggplot2)
 
-
 # Fit models --------------------------------------------------------------
+
+# Load data
 
 load("Univariate analysis/Split data.Rds")
 
+# Fit 2 types of models to decompose variance. 
+
+# Decompose variance into year, season, station, and ID
 model_var<-brm(as.integer(round(Count)) ~ Tow_area_s + (1|Year_fac) + (1|Season) + (1|Station_fac) + (1|ID),
                family=poisson, data=Data_split,
                prior=prior(normal(0,5), class="Intercept")+
@@ -19,6 +23,8 @@ model_var<-brm(as.integer(round(Count)) ~ Tow_area_s + (1|Year_fac) + (1|Season)
                chains=3, cores=3, control=list(adapt_delta=0.99),
                iter = iterations, warmup = warmup)
 
+# Decompose variance into year, month, station, and ID
+# This will be used in write-up since it aligns more closely to other methods (months were removed in sampling reduction scenarios, not seasons)
 model_var2<-brm(as.integer(round(Count)) ~ Tow_area_s + (1|Year_fac) + (1|Month) + (1|Station_fac) + (1|ID),
                 family=poisson, data=Data_split,
                 prior=prior(normal(0,5), class="Intercept")+
@@ -26,14 +32,17 @@ model_var2<-brm(as.integer(round(Count)) ~ Tow_area_s + (1|Year_fac) + (1|Month)
                   prior(cauchy(0,5), class="sd"),
                 chains=3, cores=3, control=list(adapt_delta=0.99),
                 iter = iterations, warmup = warmup)
+
+# Save both models
 save(model_var, model_var2, file=file.path("Univariate analyses", "Splittail models", "variance model.Rds"), compress="xz")
 
 
 # Create plots ------------------------------------------------------------
 
-
+# Load models
 load(file.path("Univariate analyses", "Splittail models", "variance model.Rds"))
 
+# Summarise model parameters and convert to data frame
 sum<-summary(model_var2)
 
 sum2<-enframe(sum$random)%>%

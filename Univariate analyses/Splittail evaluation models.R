@@ -1,12 +1,8 @@
-
-# Instructions -------------------------------------------------------------------
-
-# 1) Download the "Split data.Rds" file to your directory of choice
-# 2) Install the brms package from CRAN if not already installed: install.packages("brms")
-# 3) Input the folder path to the "save_folder" variable on line 14
-# 4) Run lines 11-19
-# 5) Run the script *********FOR YOUR DESIGNATED SECTION********* Just copy and paste the section into your console and run the whole chunk of code.
-# 6) Upload output (all .Rds files) to the sharepoint technical team subfolder (or box.com for Jereme)
+# Model fitting script
+# Due to the long computational demand of this script, it is designed to be divided among multiple computers
+# After running lines 7-15, each chunk can be run separately
+# To run the whole script at once, the code should be modified to move all reduced model model fitting within the
+# for loops as updates to the Full model. 
 
 require(brms)
 
@@ -17,7 +13,6 @@ load(file.path(save_folder, "Split data.Rds"))
 
 iterations<-5e3
 warmup<-iterations/4
-
 
 # Full model --------------------------------------------------------------
 
@@ -30,10 +25,7 @@ model<-brm(as.integer(round(Count)) ~ Tow_area_s + Year_fac*Season + (1|Station_
             iter = iterations, warmup = warmup)
 save(model, file=file.path(save_folder, paste0("Splittail full model.Rds")), compress="xz")
 
-
-
-
-# 10% station cut (SAM) ---------------------------------------------------------
+# 10% station cut ---------------------------------------------------------
 
 N<-10
 
@@ -65,9 +57,7 @@ if(!is.null(warn)){
 
 rm(model1)
 
-
-
-# 20% station cut (JEREME)---------------------------------------------------------
+# 20% station cut ---------------------------------------------------------
 
 N<-5
 
@@ -98,7 +88,7 @@ if(!is.null(warn)){
 }
 rm(model1)
 
-# 33% & 50% station cuts (BRIAN)---------------------------------------------------------
+# 33% & 50% station cuts ---------------------------------------------------------
 
 N<-3
 
@@ -177,7 +167,7 @@ if(!is.null(warn)){
   save(warn, file=file.path(save_folder, paste0("Splittail ", 2/N, " station cut warnings.Rds")), compress="xz")
 }
 
-# 1 & 2 month cuts (MIKE?)------------------------------------------------------------
+# 1 & 2 month cuts ------------------------------------------------------------
 
 # Fit first model so we only need to compile once
 model1<-brm(as.integer(round(Count)) ~ Tow_area_s + Year_fac*Season + (1|Station_fac) + (1|ID),
