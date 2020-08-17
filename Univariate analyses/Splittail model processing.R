@@ -10,45 +10,58 @@ require(tidyr)
 source("Univariate analyses/Survey assessment functions.R")
 
 # Full model -------------------------------------------------------------
+
+# Load the full model
 load("Univariate analyses/Splittail models/Splittail full model.Rds")
 
+# Evaluate the full model for any issues
 Full_eval<-model_diagnose(model)
 
+# Calculate 95% credidible intervals for the local trend estimates from the full model
 Full_change<-Post_processor(model, max_year=2018, model_name="Full")
 
+# Remove full model from memory
 rm(model)
 
+# Save output
 save(Full_change, file="Univariate analyses/Full model local trend.Rds")
 
 # Missing seasons from month cuts -----------------------------------------
+# Purpose: For the temporal sampling effort reductions, find seasons and years
+# that no longer have any data in the various data reduction scenarios, so those
+# seasons and years can be removed from any analyses. 
+
+# Load data 
 load("Univariate analyses/Split data.Rds")
 
 Months<-Data_split%>%
-  filter(Year<=2018)%>%
+  filter(Year<=2018)%>% # Filter to the time range of inference
   group_by(Month_num, Year, Season, .drop=FALSE)%>%
-  summarise(N=n(), .groups="drop")%>%
-  complete(Month_num=1:3, Year=1985:2018, Season)%>%
-  filter(is.na(N))
+  summarise(N=n(), .groups="drop")%>% # Count number of data points in each month, year, and season
+  complete(Month_num=1:3, Year=1985:2018, Season)%>% # Fill in missing month, year, and season combinations
+  filter(is.na(N)) # Select only month, years, and seasons with no data
 
 # Months not represented are:
 
 Season_removals<-Months%>%
-  mutate(Cut=2/3)%>%
-  rename(Replicate=Month_num)%>%
+  mutate(Cut=2/3)%>% # start with the 2/3 month cut, which only have 1 month left per season, so any missing months in seasons represent cases to remove
+  rename(Replicate=Month_num)%>% 
   select(-N)%>%
-  bind_rows(Months%>%
+  bind_rows(Months%>% # Now the 1/3 month cuts
               group_by(Year, Season)%>%
-              mutate(N=n())%>%
+              mutate(N=n())%>% # Count total number of months NOT sampled in each season and year
               ungroup()%>%
-              filter(N>1)%>%
+              filter(N>1)%>% # Remove any cases where just 1 month was NOT sampled, because that would not be an issue for these cuts where just 1 month was removed
               group_by(Year, Season)%>%
-              summarise(Replicate=(1:3)[which(!1:3%in%unique(Month_num))], .groups="drop")%>%
+              summarise(Replicate=(1:3)[which(!1:3%in%unique(Month_num))], .groups="drop")%>% # Find which 1/3 month cuts correspond to the remaining issues
               mutate(Cut=1/3))%>%
   mutate(Cut_type="Month",
          Remove=T)
 
 # Reduced models ----------------------------------------------------------
 
+
+# Generate list of reduced models, file names, and their attributes
 N_station<-c(10,5,3,2, 1.5)
 station_reps<-c(10,5,3,2, 3)
 N_month<-c(2,1)
@@ -59,6 +72,7 @@ Reduced_models<-tibble(Replicate=sequence(station_reps), N_station=rep(N_station
               mutate(File=paste0("Splittail ", 3-N_month, " month cut ", Replicate, " of ", 3, ".Rds"))
   )
 
+# Create a wrapper function to evaluate and process each reduced model
 Reduced_model_processor<- function(file){
   
   load(file.path("Univariate analyses", "Splittail models", file))
@@ -70,26 +84,32 @@ Reduced_model_processor<- function(file){
   return(list(Reduced_prob=Reduced_change, Errors=Reduced_eval))
 }
 
+# Load the processed full model output produced above
 load("Univariate analyses/Full model local trend.Rds")
+
+# Evaluate and process each reduced model
 Reduced_probs<-map(Reduced_models$File, Reduced_model_processor)
+
 # No Bulk_ESS, Tail_ESS, or Rhat issues from any models
 
-#save(Reduced_probs, file="Univariate analyses/Reduced model proportions.Rds")
+# Save outputs
+save(Reduced_probs, file="Univariate analyses/Reduced model proportions.Rds")
 
+# Convert Reduced_probs from a list to a dataframe and add more important info
 Reduced_probs_extracted<-map_dfr(1:nrow(Reduced_models), ~Reduced_probs[[.x]]$Reduced_prob%>%
                                    mutate(N_station=Reduced_models$N_station[.x], 
                                           Replicate=Reduced_models$Replicate[.x],
                                           N_month=Reduced_models$N_month[.x]))%>%
-  mutate(Cut_type=if_else(is.na(N_station), "Month", "Station"),
-         Cut=if_else(Cut_type=="Month", (3-N_month)/3, 1/N_station))%>%
+  mutate(Cut_type=if_else(is.na(N_station), "Month", "Station"), # Separate month (temporal) from station (spatial) cuts
+         Cut=if_else(Cut_type=="Month", (3-N_month)/3, 1/N_station))%>% # Calculate proportion of sampling effort removed
   select(-N_station, -N_month, -N)%>%
-  left_join(Season_removals, by=c("Year", "Season", "Replicate", "Cut", "Cut_type"))%>%
-  mutate(Remove=replace_na(Remove, FALSE))%>%
-  mutate(across(c(Prob_global, Prob_local), ~if_else(Remove, NA_real_, .x)))%>%
-  select(-Remove)%>%
-  mutate(Season=factor(Season, levels=c("Winter", "Spring", "Summer", "Fall")))
+  left_join(Season_removals, by=c("Year", "Season", "Replicate", "Cut", "Cut_type"))%>% # Account for missing seasons issue
+  mutate(Remove=replace_na(Remove, FALSE))%>% # Account for missing seasons issue
+  mutate(across(c(Prob_global, Prob_local), ~if_else(Remove, NA_real_, .x)))%>% # Account for missing seasons issue
+  select(-Remove)%>% # Account for missing seasons issue
+  mutate(Season=factor(Season, levels=c("Winter", "Spring", "Summer", "Fall"))) # Reorder seasons
 
-# How much do the replicates differ?
+# Plot results for each replicate separately
 p_rep<-ggplot(Reduced_probs_extracted, aes(x=Year, y=Prob_local, color=as.factor(Replicate), group=Replicate))+
   geom_line()+
   facet_grid(Cut_type*round(Cut,2)~Season)+
@@ -106,6 +126,7 @@ Reduced_probs_year<-Reduced_probs_extracted%>%
   group_by(Cut_type, Cut, Year, Season)%>%
   summarise(across(c(Prob_global, Prob_local), list(mean=mean, sd=sd), na.rm=T), .groups="drop")
 
+# Plot results for each year and season, summarized across replicates
 p_ribbon<-ggplot(Reduced_probs_year, aes(x=Year, y=Prob_local_mean, fill=Cut, 
                                          shape=Cut_type, group=interaction(Cut,Cut_type)))+
   geom_ribbon(aes(ymin=Prob_local_mean-Prob_local_sd, ymax=Prob_local_mean+Prob_local_sd), alpha=0.4)+
@@ -126,6 +147,7 @@ Reduced_probs_season<-Reduced_probs_extracted%>%
   group_by(Cut_type, Cut, Season)%>%
   summarise(across(c(Prob_global, Prob_local), list(mean=mean, sd=sd), na.rm=T), .groups="drop")
 
+# Plot results for each season, summarised across years and replicates
 p_points<-ggplot(Reduced_probs_season, aes(x=Cut, y=Prob_local_mean, ymin=Prob_local_mean-Prob_local_sd, 
                                            ymax=Prob_local_mean+Prob_local_sd, color=Cut, fill=Cut, 
                                            shape=Cut_type, group=interaction(Cut,Cut_type)))+
@@ -143,23 +165,9 @@ p_points<-ggplot(Reduced_probs_season, aes(x=Cut, y=Prob_local_mean, ymin=Prob_l
 
 ggsave(p_points, file="Univariate analyses/Figures/Splittail reduced model summarized.png", device="png", units="in", width=5, height=3)
 
-# Same plot with global prob
-p_points_global<-ggplot(Reduced_probs_season, aes(x=Season, y=Prob_global_mean, ymin=Prob_global_mean-Prob_global_sd, 
-                                 ymax=Prob_global_mean+Prob_global_sd, color=Cut, fill=Cut, 
-                                 shape=Cut_type, group=interaction(Cut,Cut_type)))+
-  geom_pointrange(position=position_dodge(width=0.5), shape=21, color="black", size=0.3, stroke=0.3)+
-  facet_grid(Cut_type~.)+
-  scale_color_viridis_c(aesthetics = c("fill", "color"), name="Proportion removed", direction = -1,
-                        guide=guide_colorbar(barheight=0.5, title.position="top", title.hjust=0.5, direction="horizontal"))+
-  coord_cartesian(expand=0, ylim=c(0,1))+
-  ylab("Proportional overlap")+
-  theme_bw()+
-  theme(strip.background=element_blank(), text=element_text(size=8), panel.spacing.y = unit(0.5, "lines"), legend.position = c(0.5, 1.08),
-        legend.margin=margin(0,0,0,0), legend.spacing=unit(0, "lines"), plot.margin = margin(40,0,0,0))
-
-ggsave(p_points_global, file="Univariate analyses/Figures/Splittail reduced model summarized global.png", device="png", units="in", width=3, height=4)
-
 # Distribution plots ------------------------------------------------------
+
+# Plot raw model results for each model
 
 Distributional_model_plotter<-function(file, Full_post){
   file2<-str_remove(file, fixed(".Rds"))
@@ -191,7 +199,7 @@ Distributional_model_plotter(Reduced_models$File[1], Full_post)
 
 map(Reduced_models$File, ~Distributional_model_plotter(.x, Full_post))
 
-# Ribbon plots
+# Create example ribbon plots for full model and 1 reduced model for figure in technical report
 load(file.path("Univariate analyses", "Splittail models", Reduced_models%>%filter(N_station==2 & Replicate==1)%>%pull(File)))
 Data<-model_predictor(model)
 rm(model)
@@ -199,11 +207,12 @@ p1<-Ribbon_plotter(Full_post, Data, ".value")+ylab("Predicted count")+theme(lege
 p2<-Ribbon_plotter(Full_post, Data, "Change_local")+ylab("Local trend")+theme(legend.position = "none")
 
 p<-p1/p2+plot_annotation(tag_levels = "A", tag_suffix = ")")
-ggsave(p, file=paste0("Univariate analyses/Figures/Distribution plots/", str_remove(Reduced_models%>%filter(N_station==2 & Replicate==1)%>%pull(File), fixed(".Rds")), 
+ggsave(p, file=paste0("Univariate analyses/Figures/", str_remove(Reduced_models%>%filter(N_station==2 & Replicate==1)%>%pull(File), fixed(".Rds")), 
                       " ribbon example.png"), device="png", units="in", width=8, height=8)
 
 
-# Correlates of proportion overlap ----------------------------------------
+# Explore correlates of proportion overlap ----------------------------------------
+require(waterYearType)
 
 Full_sum<-Full_post%>%
   filter(Year!=min(Year))%>%
@@ -214,7 +223,7 @@ Data_sum<-Data_split%>%
   group_by(Year, Season)%>%
   summarise(N=n(), .groups="drop")
 
-water_year<-waterYearType::water_year_indices%>%
+water_year<-water_year_indices%>%
   select(location, WY, Yr_type, Index)%>%
   pivot_wider(names_from = location, values_from = c(Yr_type, Index))%>%
   rename(Sac_WY_type=`Yr_type_Sacramento Valley`, SJ_WY_type=`Yr_type_San Joaquin Valley`,
