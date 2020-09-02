@@ -165,6 +165,25 @@ p_points<-ggplot(Reduced_probs_season, aes(x=Cut, y=Prob_local_mean, ymin=Prob_l
 
 ggsave(p_points, file="Univariate analyses/Figures/Splittail reduced model summarized.png", device="png", units="in", width=5, height=3)
 
+# For presentation
+p_points<-ggplot(Reduced_probs_season%>%filter(Season=="Winter"), aes(x=Cut, y=Prob_local_mean, ymin=Prob_local_mean-Prob_local_sd, 
+                                                            ymax=Prob_local_mean+Prob_local_sd, color=Cut, fill=Cut, 
+                                                            shape=Cut_type, group=interaction(Cut,Cut_type)))+
+  geom_pointrange(color="black", size=0.3, stroke=0.3, position=position_dodge(width=0.05))+
+  geom_hline(yintercept=0.95, linetype=2)+
+  scale_color_viridis_c(aesthetics = c("fill", "color"), name="Proportion removed", direction = -1,
+                        guide="none")+
+  scale_y_continuous(expand=expansion(0,0), limits=c(0,1))+
+  scale_x_continuous(breaks=c(1/10, 1/5, 1/3, 1/2, 2/3), labels=c("1/10", "1/5", "1/3", "1/2", "2/3"))+
+  scale_shape_manual(values=c(21, 24), name="Cut type", guide=guide_legend(override.aes = list(stroke=0.5, linetype=0, fill="black")))+
+  ylab("Proportional overlap with full model")+
+  xlab("Proportional reduction in sampling effort")+
+  theme_bw()+
+  theme(strip.background=element_blank(), legend.position=c(0.12, 0.2), legend.background=element_rect(color="black"),
+        text=element_text(size=12))
+
+ggsave(p_points, file="Univariate analyses/Figures/Splittail reduced model summarized presentation.png", device="png", units="in", width=5, height=3)
+
 # Distribution plots ------------------------------------------------------
 
 # Plot raw model results for each model
@@ -200,7 +219,7 @@ Distributional_model_plotter(Reduced_models$File[1], Full_post)
 map(Reduced_models$File, ~Distributional_model_plotter(.x, Full_post))
 
 # Create example ribbon plots for full model and 1 reduced model for figure in technical report
-load(file.path("Univariate analyses", "Splittail models", Reduced_models%>%filter(N_station==2 & Replicate==1)%>%pull(File)))
+load(file.path("Univariate analyses", "Splittail models", "Splittail 0.5 station cut 1 of 2.Rds"))
 Data<-model_predictor(model)
 rm(model)
 p1<-Ribbon_plotter(Full_post, Data, ".value")+ylab("Predicted count")+theme(legend.position=c(0.92, 0.85), legend.background = element_rect(color="black"))
@@ -210,6 +229,14 @@ p<-p1/p2+plot_annotation(tag_levels = "A", tag_suffix = ")")
 ggsave(p, file=paste0("Univariate analyses/Figures/", str_remove(Reduced_models%>%filter(N_station==2 & Replicate==1)%>%pull(File), fixed(".Rds")), 
                       " ribbon example.png"), device="png", units="in", width=8, height=8)
 
+# For presentation
+p1<-Ribbon_plotter(filter(Full_post, Season=="Winter"), filter(Data, Season=="Winter"), ".value", FALSE)+
+  ylab("Predicted count")+xlab("")+
+  theme(legend.position=c(0.1, 0.75), legend.background = element_rect(color="black"), text=element_text(size=18), plot.margin = margin(b=-150))
+p2<-Ribbon_plotter(filter(Full_post, Season=="Winter"), filter(Data, Season=="Winter"), "Change_local", FALSE)+ylab("Local trend")+theme(legend.position = "none", text=element_text(size=18), plot.margin = margin(t=-150))
+p<-p1/p2
+
+ggsave(p, file=paste0("Univariate analyses/Figures/ 0.5 station cut 1 of 2 ribbon example presentation.png"), device="png", units="in", width=8, height=6)
 
 # Explore correlates of proportion overlap ----------------------------------------
 require(waterYearType)

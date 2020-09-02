@@ -136,7 +136,7 @@ Distribution_plotter<-function(Full_post, Reduced_post, Y){
 # and a choice of variable to plot on the Y-axis (Y)
 # Options for Y are "Change_local", "Change_global", or ".value" for the raw predictions
 
-Ribbon_plotter<-function(Full_post, Reduced_post, Y){
+Ribbon_plotter<-function(Full_post, Reduced_post, Y, Facet=T){
   Data<-bind_rows(Full_post%>%
                     mutate(Model="Full"),
                   Reduced_post%>%
@@ -158,7 +158,9 @@ Ribbon_plotter<-function(Full_post, Reduced_post, Y){
       geom_hline(yintercept = 0, linetype = "dashed")
     }}+
     coord_cartesian(expand=0)+
-    facet_wrap(~Season, nrow=1)+
+    {if(Facet){
+      facet_wrap(~Season, nrow=1)
+    }}+
     scale_x_continuous(breaks=seq(1985, 2020, by=5), limits=c(1985, 2018))+
     scale_fill_manual(values = c("dodgerblue3", "firebrick1"), aesthetics = c("fill", "color"))+
     xlab("Year")+
