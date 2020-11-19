@@ -1084,6 +1084,8 @@ ltmr_full <- merge(ltmr_count, ltmr_cov, all.x = T) %>%
 #<><><><><><><><><><><><><><><><><><>#
 #<> Covered Cod End Data <>#
 #<><><><><><><><><><><><><><><><><><>#
+# This data can be found at Lara Mitchell's github site: https://github.com/lmitchell4/fmwt-cce-2014-2015.
+# The file for our analysis was converted to a csv file, which would be needed to run this code
 codend <- read.csv("mitchel_covered_codend.csv", header = T) %>%
   filter(GearTypeCode == "FMWTC2B", # 2 types of trawls, this is the more common (2671 vs 304)
          Volume > 0) %>% # remove samples where volume was not recorded
@@ -1532,15 +1534,15 @@ dat_pred <- data.frame(turb = seq(from = min(dat$turbidityL, na.rm = T),
 pred_N <- array(NA, dim = c(nrow(dat_pred), 5, 5),
                 dimnames = list(paste("Cov", 1:40, sep = "_"),
                                 c("Mean", "Low", "Up", "Turbidity", "Salinity"),
-                                c("Model_1_Turbidity", "Model_1_Salinity", "Model_2_Salinity", 
-                                  "Model_3_Salinity", "Model_3_Turbidity")))
+                                c("Model_4_Turbidity", "Model_4_Salinity", "Model_5_Salinity", 
+                                  "Model_6_Salinity", "Model_6_Turbidity")))
 pred_p <- array(NA, dim = c(nrow(dat_pred), 5, 3), dimnames = list(paste("Cov", 1:40, sep = "_"),
                                                                    c("Mean", "Low", "Up", "Effort", "Turbidity"),
-                                                                   c("Model_2_Effort", "Model_2_Turbidity", "Model_3_Effort")))
+                                                                   c("Model_5_Effort", "Model_5_Turbidity", "Model_6_Effort")))
 pred_ret <- array(NA, dim = c(nrow(dat_pred), 4, 4), dimnames = list(paste("Cov", 1:40, sep = "_"),
                                                                      c("Mean", "Low", "Up", "Biomass"),
-                                                                     c("Model_2_sizesmall", "Model_2_sizelarge", 
-                                                                       "Model_3_sizesmall", "Model_3_sizelarge")))
+                                                                     c("Model_5_sizesmall", "Model_5_sizelarge", 
+                                                                       "Model_6_sizesmall", "Model_6_sizelarge")))
 
 
 load(file = "CH_4.3_model1.RData") # Basic Count Model
@@ -1639,13 +1641,13 @@ pred_ret[, 4, ] <- dat_pred$density
 pred_N <- as.data.frame.table(pred_N) %>%
   spread(., Var2, Freq) %>%
   separate(Var3, c("Ref", "Model", "Covariate")) %>%
-  mutate(Model = recode(Model, "1" = "Model 1", "2" = "Model 2", "3" = "Model 3"))
+  mutate(Model = recode(Model, "4" = "Model 4", "5" = "Model 5", "6" = "Model 6"))
 
 pred.N.turb <- ggplot(data = filter(pred_N, Covariate == "Turbidity"), aes(x = Turbidity, y = Mean)) + 
   geom_ribbon(aes(ymin = Low, ymax = Up, fill = as.factor(Model)), alpha = 0.4) + 
   geom_line(aes(y = Mean, colour = Model), lwd = 2) +
   guides(colour = FALSE) +
-  labs(x = "Standardized turbidity", y = "Abundance") +
+  labs(x = "Standardized Secchi depth", y = "Abundance") +
   scale_fill_manual(values = c("#CC79A7", "#009E73")) +   #c("blue", "darkturquoise")) +
   scale_colour_manual(values = c("#CC79A7", "#009E73")) + #c("blue", "darkturquoise")) +
   theme(axis.text = element_text(size = 12),
@@ -1680,7 +1682,7 @@ pred.N.salt <- ggplot(data = filter(pred_N, Covariate == "Salinity"), aes(x = Sa
 pred_p <- as.data.frame.table(pred_p) %>%
   spread(., Var2, Freq) %>%
   separate(Var3, c("Ref", "Model", "Covariate")) %>%
-  mutate(Model = recode(Model, "2" = "Model 2", "3" = "Model 3"))
+  mutate(Model = recode(Model, "5" = "Model 5", "6" = "Model 6"))
 
 p.avail.turb <- ggplot(data = filter(pred_p, Covariate == "Turbidity"), aes(x = Turbidity, y = Mean)) + 
   geom_ribbon(aes(ymin = Low, ymax = Up, fill = as.factor(Model)), alpha = 0.4) + 
@@ -1688,7 +1690,7 @@ p.avail.turb <- ggplot(data = filter(pred_p, Covariate == "Turbidity"), aes(x = 
   guides(colour = FALSE) +
   scale_fill_manual(values = c("#0072B2")) +
   scale_colour_manual(values = c("#0072B2")) +
-  labs(x = "Standardized turbidity", y = expression(q[Availability])) +
+  labs(x = "Standardized Secchi depth", y = expression(q[Availability])) +
   theme(axis.text = element_text(size = 12),
         axis.title.x = element_text(vjust = -2.5),
         legend.key = element_blank(),
@@ -1726,7 +1728,7 @@ grid.arrange(p.avail.turb, p.avail.vol, # Figure 4.9
 pred_ret <- as.data.frame.table(pred_ret) %>%
   spread(., Var2, Freq) %>%
   separate(Var3, c("Ref", "Model", "Covariate")) %>%
-  mutate(Model = recode(Model, "2" = "Model 2", "3" = "Model 3"),
+  mutate(Model = recode(Model, "5" = "Model 5", "6" = "Model 6"),
          Covariate = recode(Covariate, "sizesmall" = "Small fish", 
                             "sizelarge" = "Large fish")) %>%
   transform(Covariate = factor(Covariate, levels = c("Small fish", "Large fish")))
@@ -1772,9 +1774,13 @@ p.ret.large <- ggplot(data = filter(pred_ret, Covariate == "Large fish"), aes(x 
 grid.arrange(p.ret.small, p.ret.large, # Figure 4.8
              ncol = 1, nrow = 2)
 
+grid.arrange(p.ret.small, p.avail.turb, pred.N.turb, 
+             p.ret.large, p.avail.vol, pred.N.salt,
+             ncol = 3, nrow = 2)
+
 
 #<><><><><><><><><><><><><><><><><><><><><><><><><><><><>#
-#<> Workflow 4.4: Application of the Integrated Abundance Model to the FMWT <>#
+#<> Workflow 4.4: Relative Catchability Among LTMR Surveys and Gear Types <>#
 # Analysis is based on Walker et al. (2017) and Moriarty et al. (2020). 
 # Moriarty, M., Sethi, S.A., Pedreschi, D., Smeltz, T.S., McGonigle, C., Harris, B.P., Wolf, N., and 
 #   Greenstreet, S.P.R. 2020. Combining fisheries surveys to inform marine species distribution modelling. 
