@@ -7,6 +7,7 @@ require(ggplot2)
 require(patchwork)
 require(stringr)
 require(tidyr)
+require(furrr)
 source("Univariate analyses/Survey assessment functions.R")
 
 # Full model -------------------------------------------------------------
@@ -88,7 +89,10 @@ Reduced_model_processor<- function(file){
 load("Univariate analyses/Full model local trend.Rds")
 
 # Evaluate and process each reduced model
-Reduced_probs<-map(Reduced_models$File, Reduced_model_processor)
+cores <- 4
+plan(multisession, workers = cores, gc=T, earlySignal=T)
+options(future.globals.maxSize = 70000000000) 
+Reduced_probs<-future_map(Reduced_models$File, Reduced_model_processor, .options=furrr_options(seed=TRUE), .progress=TRUE)
 
 # No Bulk_ESS, Tail_ESS, or Rhat issues from any models
 
@@ -105,7 +109,7 @@ Reduced_probs_extracted<-map_dfr(1:nrow(Reduced_models), ~Reduced_probs[[.x]]$Re
   select(-N_station, -N_month, -N)%>%
   left_join(Season_removals, by=c("Year", "Season", "Replicate", "Cut", "Cut_type"))%>% # Account for missing seasons issue
   mutate(Remove=replace_na(Remove, FALSE))%>% # Account for missing seasons issue
-  mutate(across(c(Prob_global, Prob_local), ~if_else(Remove, NA_real_, .x)))%>% # Account for missing seasons issue
+  mutate(across(c(Prob_local), ~if_else(Remove, NA_real_, .x)))%>% # Account for missing seasons issue
   select(-Remove)%>% # Account for missing seasons issue
   mutate(Season=factor(Season, levels=c("Winter", "Spring", "Summer", "Fall"))) # Reorder seasons
 
@@ -119,12 +123,14 @@ p_rep<-ggplot(Reduced_probs_extracted, aes(x=Year, y=Prob_local, color=as.factor
   theme_bw()+
   theme(strip.background=element_blank(), legend.position="none", text=element_text(size=8), panel.spacing.y = unit(0.5, "lines"))
 
-ggsave(p_rep, file="Univariate analyses/Figures/Splittail reduced model replicates.png", device="png", units="in", width=6, height=6)
+ggsave(p_rep, file="Univariate analyses/Figures/Publication Splittail reduced model replicates.png", device="png", units="in", width=6, height=6)
 # Summarise results for each year and season ------------------------------
 
 Reduced_probs_year<-Reduced_probs_extracted%>%
   group_by(Cut_type, Cut, Year, Season)%>%
-  summarise(across(c(Prob_global, Prob_local), list(mean=mean, sd=sd), na.rm=T), .groups="drop")
+  summarise(across(c(Prob_local), list(mean=mean, sd=sd), na.rm=T), .groups="drop")%>%
+  mutate(Prob_local_sd=if_else((Prob_local_mean+Prob_local_sd)>1, 1-Prob_local_mean, Prob_local_sd),
+         Prob_local_sd=if_else((Prob_local_mean-Prob_local_sd)<0, Prob_local_mean, Prob_local_sd))
 
 # Plot results for each year and season, summarized across replicates
 p_ribbon<-ggplot(Reduced_probs_year, aes(x=Year, y=Prob_local_mean, fill=Cut, 
@@ -140,12 +146,12 @@ p_ribbon<-ggplot(Reduced_probs_year, aes(x=Year, y=Prob_local_mean, fill=Cut,
   theme(strip.background=element_blank(), text=element_text(size=8), panel.spacing.y = unit(0.5, "lines"), legend.position = c(0.5, 1.12),
         legend.margin=margin(0,0,0,0), legend.spacing=unit(0, "lines"), plot.margin = margin(30,0,0,0))
 
-ggsave(p_ribbon, file="Univariate analyses/Figures/Splittail reduced model ribbon.png", device="png", units="in", width=6, height=4)
+ggsave(p_ribbon, file="Univariate analyses/Figures/Publication Splittail reduced model ribbon.png", device="png", units="in", width=6, height=4)
 # Summarise results for each season ---------------------------------------
 
 Reduced_probs_season<-Reduced_probs_extracted%>%
   group_by(Cut_type, Cut, Season)%>%
-  summarise(across(c(Prob_global, Prob_local), list(mean=mean, sd=sd), na.rm=T), .groups="drop")
+  summarise(across(c(Prob_local), list(mean=mean, sd=sd), na.rm=T), .groups="drop")
 
 # Plot results for each season, summarised across years and replicates
 p_points<-ggplot(Reduced_probs_season, aes(x=Cut, y=Prob_local_mean, ymin=Prob_local_mean-Prob_local_sd, 
@@ -153,17 +159,16 @@ p_points<-ggplot(Reduced_probs_season, aes(x=Cut, y=Prob_local_mean, ymin=Prob_l
                                            shape=Cut_type, group=interaction(Cut,Cut_type)))+
   geom_pointrange(color="black", size=0.3, stroke=0.3, position=position_dodge(width=0.05))+
   facet_grid(~Season)+
-  geom_hline(yintercept=0.95, linetype=2)+
   scale_color_viridis_c(aesthetics = c("fill", "color"), name="Proportion removed", direction = -1,
                         guide="none")+
-  scale_y_continuous(expand=expansion(0,0), limits=c(0,1))+
+  coord_cartesian(expand=0, ylim=c(0,1))+
   scale_shape_manual(values=c(21, 24), name="Cut type", guide=guide_legend(override.aes = list(stroke=0.5, linetype=0, fill="black")))+
   ylab("Proportional overlap with full model")+
   xlab("Proportional reduction in sampling effort")+
   theme_bw()+
   theme(strip.background=element_blank(), text=element_text(size=8), legend.position=c(0.9, 0.2), legend.background=element_rect(color="black"))
 
-ggsave(p_points, file="Univariate analyses/Figures/Splittail reduced model summarized.png", device="png", units="in", width=5, height=3)
+ggsave(p_points, file="Univariate analyses/Figures/Publication Splittail reduced model summarized.png", device="png", units="in", width=5, height=3)
 
 # For presentation
 p_points<-ggplot(Reduced_probs_season%>%filter(Season=="Winter"), aes(x=Cut, y=Prob_local_mean, ymin=Prob_local_mean-Prob_local_sd, 

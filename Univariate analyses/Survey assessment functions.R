@@ -17,7 +17,7 @@ random_groups<-function(seed, N_total, N_groups){
 model_predictor<-function(model, max_year=2018){
   out<-expand.grid(Tow_area_s=0,  Year_fac=factor(1985:max_year), Season=c("Winter", "Spring", "Summer", "Fall"))%>%
     mutate(Year=as.numeric(as.character(Year_fac)))%>%
-    add_fitted_draws(model, re_formula=NA, scale="response")%>%
+    add_epred_draws(model, re_formula=NA, scale="response", value=".value")%>%
     ungroup()%>%
     mutate(Mean=mean(.value))%>%
     group_by(Season, .draw)%>%
@@ -39,15 +39,19 @@ Post_processor<-function(model, max_year=2018, model_name=NULL, Intervals=NULL){
     mutate(Model=model_name)%>%
     {if(model_name=="Full"){
       group_by(., Season, Year, Year_fac)%>%
-        median_qi(Change_local, Change_global, .width = 0.95)%>%
-        select(Season, Year, Year_fac, Change_local.lower, Change_local.upper, Change_global.lower, Change_global.upper)%>%
+        median_qi(Change_local, .width = 0.95, .simple_names=FALSE)%>%
+        select(Season, Year, Year_fac, Change_local.lower, Change_local.upper)%>%
         ungroup()
     } else{
-      left_join(., Intervals, by=c("Year_fac", "Year", "Season"))%>%
-        mutate(IN_global=if_else(Change_global > Change_global.lower & Change_global <= Change_global.upper, 1, 0),
-               IN_local=if_else(Change_local > Change_local.lower & Change_local <= Change_local.upper, 1, 0))%>%
+      group_by(., Season, Year, Year_fac)%>%
+        mutate(lower=min(qi(Change_local)), upper=max(qi(Change_local)))%>%
+        ungroup()%>%
+        filter(Change_local>=lower & Change_local<=upper)%>%
+        select(-lower, -upper, -Change_global)%>%
+        left_join(Intervals, by=c("Year_fac", "Year", "Season"))%>%
+        mutate(IN_local=if_else(Change_local > Change_local.lower & Change_local <= Change_local.upper, 1, 0))%>%
         group_by(Year, Year_fac, Season)%>%
-        summarise(N=n(), Prob_global=sum(IN_global)/N, Prob_local=sum(IN_local)/N, .groups="drop")
+        summarise(N=n(), Prob_local=sum(IN_local)/N, .groups="drop")
     }}
   return(out) 
 }
