@@ -13,19 +13,19 @@ source("Univariate analyses/Survey assessment functions.R")
 # Full model -------------------------------------------------------------
 
 # Load the full model
-load("Univariate analyses/Splittail models/Splittail full model.Rds")
+Splittail_full_model<-readRDS("Univariate analyses/Splittail models/Splittail full model.Rds")
 
 # Evaluate the full model for any issues
-Full_eval<-model_diagnose(model)
+Full_eval<-model_diagnose(Splittail_full_model)
 
 # Calculate 95% credidible intervals for the local trend estimates from the full model
-Full_change<-Post_processor(model, max_year=2018, model_name="Full")
+Full_change<-Post_processor(Splittail_full_model, max_year=2018, model_name="Full")
 
 # Remove full model from memory
-rm(model)
+rm(Splittail_full_model)
 
 # Save output
-save(Full_change, file="Univariate analyses/Full model local trend.Rds")
+saveRDS(Full_change, file="Univariate analyses/Full model local trend.Rds")
 
 # Missing seasons from month cuts -----------------------------------------
 # Purpose: For the temporal sampling effort reductions, find seasons and years
@@ -33,7 +33,7 @@ save(Full_change, file="Univariate analyses/Full model local trend.Rds")
 # seasons and years can be removed from any analyses. 
 
 # Load data 
-load("Univariate analyses/Split data.Rds")
+Data_split<-readRDS("Univariate analyses/Split data.Rds")
 
 Months<-Data_split%>%
   filter(Year<=2018)%>% # Filter to the time range of inference
@@ -76,7 +76,7 @@ Reduced_models<-tibble(Replicate=sequence(station_reps), N_station=rep(N_station
 # Create a wrapper function to evaluate and process each reduced model
 Reduced_model_processor<- function(file){
   
-  load(file.path("Univariate analyses", "Splittail models", file))
+  model<-readRDS(file.path("Univariate analyses", "Splittail models", file))
   Reduced_eval<-model_diagnose(model)
   
   Reduced_change<-Post_processor(model, max_year=2018, model_name=file, Intervals=Full_change)
@@ -86,7 +86,7 @@ Reduced_model_processor<- function(file){
 }
 
 # Load the processed full model output produced above
-load("Univariate analyses/Full model local trend.Rds")
+Full_change<-readRDS("Univariate analyses/Full model local trend.Rds")
 
 # Evaluate and process each reduced model
 cores <- 4
@@ -97,7 +97,7 @@ Reduced_probs<-future_map(Reduced_models$File, Reduced_model_processor, .options
 # No Bulk_ESS, Tail_ESS, or Rhat issues from any models
 
 # Save outputs
-save(Reduced_probs, file="Univariate analyses/Reduced model proportions.Rds")
+saveRDS(Reduced_probs, file="Univariate analyses/Reduced model proportions.Rds")
 
 # Convert Reduced_probs from a list to a dataframe and add more important info
 Reduced_probs_extracted<-map_dfr(1:nrow(Reduced_models), ~Reduced_probs[[.x]]$Reduced_prob%>%
@@ -195,7 +195,7 @@ ggsave(p_points, file="Univariate analyses/Figures/Splittail reduced model summa
 
 Distributional_model_plotter<-function(file, Full_post){
   file2<-str_remove(file, fixed(".Rds"))
-  load(file.path("Univariate analyses", "Splittail models", file))
+  model<-readRDS(file.path("Univariate analyses", "Splittail models", file))
   Data<-model_predictor(model)
   rm(model)
   p<-Distribution_plotter(Full_post, Data, "Change_local")+
@@ -216,7 +216,7 @@ Distributional_model_plotter<-function(file, Full_post){
   return(message(paste("Finished:", file)))
 }
 
-load("~/LTMRpilot/Univariate analyses/Splittail models/Splittail full model.Rds")
+model<-readRDS("~/LTMRpilot/Univariate analyses/Splittail models/Splittail full model.Rds")
 Full_post<-model_predictor(model)
 
 Distributional_model_plotter(Reduced_models$File[1], Full_post)
@@ -224,7 +224,7 @@ Distributional_model_plotter(Reduced_models$File[1], Full_post)
 map(Reduced_models$File, ~Distributional_model_plotter(.x, Full_post))
 
 # Create example ribbon plots for full model and 1 reduced model for figure in technical report
-load(file.path("Univariate analyses", "Splittail models", "Splittail 0.5 station cut 1 of 2.Rds"))
+model<-readRDS(file.path("Univariate analyses", "Splittail models", "Splittail 0.5 station cut 1 of 2.Rds"))
 Data<-model_predictor(model)
 rm(model)
 p1<-Ribbon_plotter(Full_post, Data, ".value")+ylab("Predicted count")+theme(legend.position=c(0.92, 0.85), legend.background = element_rect(color="black"))

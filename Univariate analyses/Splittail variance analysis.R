@@ -10,7 +10,10 @@ require(ggplot2)
 
 # Load data
 
-load("Univariate analysis/Split data.Rds")
+Data_split<-readRDS("Univariate analyses/Split data.Rds")
+
+iterations<-5e3
+warmup<-iterations/4
 
 # Fit 2 types of models to decompose variance. 
 
@@ -30,26 +33,37 @@ model_var2<-brm(as.integer(round(Count)) ~ Tow_area_s + (1|Year_fac) + (1|Month)
                 prior=prior(normal(0,5), class="Intercept")+
                   prior(normal(0,5), class="b")+
                   prior(cauchy(0,5), class="sd"),
-                chains=3, cores=3, control=list(adapt_delta=0.99),
-                iter = iterations, warmup = warmup)
+                chains=3, cores=3, control=list(adapt_delta=0.9),
+                iter = iterations, warmup = warmup,
+                backend = "cmdstanr", threads = threading(2))
+
+model_var3<-brm(bf(as.integer(round(Count)) ~ Tow_area_s + (1|Year_fac) + (1|Month) + (1|Station_fac) + (1|ID), hu ~ (1|Station_fac)),
+                family=hurdle_poisson, data=Data_split,
+                prior=prior(normal(0,5), class="Intercept")+
+                  prior(normal(0,5), class="b")+
+                  prior(cauchy(0,5), class="sd"),
+                chains=3, cores=3, control=list(adapt_delta=0.9),
+                iter = iterations, warmup = warmup,
+                backend = "cmdstanr", threads = threading(2))
 
 # Save both models
-save(model_var, model_var2, file=file.path("Univariate analyses", "Splittail models", "variance model.Rds"), compress="xz")
+saveRDS(model_var3, file=file.path("Univariate analyses", "Splittail models", "variance model.Rds"), compress="xz")
 
 
 # Create plots ------------------------------------------------------------
 
 # Load models
-load(file.path("Univariate analyses", "Splittail models", "variance model.Rds"))
+model_var3<-readRds(file.path("Univariate analyses", "Splittail models", "variance model.Rds"))
 
 # Summarise model parameters and convert to data frame
-sum<-summary(model_var2)
+sum<-summary(model_var3)
 
 sum2<-enframe(sum$random)%>%
-  mutate(value=map(value, ~as_tibble(.x)))%>%
-  unnest(value)%>%
-  mutate(name=recode(name, Year_fac="Year", Station_fac="Station", ID="Sample"))%>%
-  mutate(name=factor(name, levels=c("Sample", "Station", "Month", "Year")))
+  unnest(cols=value)%>%
+  mutate(name=recode(name, Year_fac="Year", Station_fac="Station", ID="Sample"),
+         name=case_when(name=="Station" & Estimate==max(Estimate) ~ "Station_hu",
+                        TRUE ~ name))%>%
+  mutate(name=factor(name, levels=c("Sample", "Station", "Station_hu", "Month", "Year")))
 
 p_var<-ggplot(sum2, aes(y=name, x=Estimate, xmin=`l-95% CI`, xmax=`u-95% CI`))+
   geom_pointrange()+

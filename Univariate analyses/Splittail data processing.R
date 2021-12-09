@@ -54,4 +54,4 @@ Data_split<-Data%>%
     Month%in%c(2,5,8,11) ~ 3,
   ))
 
-save(Data_split, file="Univariate analyses/Split data.Rds")
+saveRDS(Data_split, file="Univariate analyses/Split data.Rds")
