@@ -36,6 +36,7 @@ model_var2<-brm(as.integer(round(Count)) ~ Tow_area_s + (1|Year_fac) + (1|Month)
                 chains=3, cores=3, control=list(adapt_delta=0.9),
                 iter = iterations, warmup = warmup,
                 backend = "cmdstanr", threads = threading(2))
+# 1858.1 seconds
 
 model_var3<-brm(bf(as.integer(round(Count)) ~ Tow_area_s + (1|Year_fac) + (1|Month) + (1|Station_fac) + (1|ID), hu ~ (1|Station_fac)),
                 family=hurdle_poisson, data=Data_split,

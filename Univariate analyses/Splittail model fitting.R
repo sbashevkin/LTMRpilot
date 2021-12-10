@@ -7,7 +7,7 @@
 require(brms)
 
 # Enter the folder where you've saved the "Split data.Rds" file and where you would like the models saved
-save_folder<-"Univariate analyses"
+save_folder<-file.path("Univariate analyses", "models")
 
 Data_split<-readRDS("Univariate analyses/Split data.Rds")
 
