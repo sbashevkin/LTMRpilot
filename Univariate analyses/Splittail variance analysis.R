@@ -43,9 +43,15 @@ model_var3<-brm(bf(as.integer(round(Count)) ~ Tow_area_s + (1|Year_fac) + (1|Mon
                 prior=prior(normal(0,5), class="Intercept")+
                   prior(normal(0,5), class="b")+
                   prior(cauchy(0,5), class="sd"),
-                chains=3, cores=3, control=list(adapt_delta=0.9),
+                chains=3, cores=3,
                 iter = iterations, warmup = warmup,
                 backend = "cmdstanr", threads = threading(2))
+
+p<-pp_check(model_var3)
+p
+p+scale_x_continuous(trans="log1p")
+prop_zero <- function(x) mean(x == 0)
+pp_check(model_var3, type="stat", stat=prop_zero, resp=resp)
 
 # Save both models
 saveRDS(model_var3, file=file.path("Univariate analyses", "Splittail models", "variance model.Rds"), compress="xz")
