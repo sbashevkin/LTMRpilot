@@ -36,41 +36,29 @@ model_var2<-brm(as.integer(round(Count)) ~ Tow_area_s + (1|Year_fac) + (1|Month)
                 chains=3, cores=3, control=list(adapt_delta=0.9),
                 iter = iterations, warmup = warmup,
                 backend = "cmdstanr", threads = threading(2))
-# 1858.1 seconds
 
-model_var3<-brm(bf(as.integer(round(Count)) ~ Tow_area_s + (1|Year_fac) + (1|Month) + (1|Station_fac) + (1|ID), hu ~ (1|Station_fac)),
-                family=hurdle_poisson, data=Data_split,
-                prior=prior(normal(0,5), class="Intercept")+
-                  prior(normal(0,5), class="b")+
-                  prior(cauchy(0,5), class="sd"),
-                chains=3, cores=3,
-                iter = iterations, warmup = warmup,
-                backend = "cmdstanr", threads = threading(2))
-
-p<-pp_check(model_var3)
+p<-pp_check(model_var2)
 p
 p+scale_x_continuous(trans="log1p")
 prop_zero <- function(x) mean(x == 0)
-pp_check(model_var3, type="stat", stat=prop_zero, resp=resp)
+pp_check(model_var2, type="stat", stat=prop_zero, resp=resp)
 
 # Save both models
-saveRDS(model_var3, file=file.path("Univariate analyses", "Splittail models", "variance model.Rds"), compress="xz")
+saveRDS(model_var2, file=file.path("Univariate analyses", "Splittail models", "variance model.Rds"), compress="xz")
 
 
 # Create plots ------------------------------------------------------------
 
 # Load models
-model_var3<-readRds(file.path("Univariate analyses", "Splittail models", "variance model.Rds"))
+model_var2<-readRds(file.path("Univariate analyses", "Splittail models", "variance model.Rds"))
 
 # Summarise model parameters and convert to data frame
-sum<-summary(model_var3)
+sum<-summary(model_var2)
 
 sum2<-enframe(sum$random)%>%
   unnest(cols=value)%>%
-  mutate(name=recode(name, Year_fac="Year", Station_fac="Station", ID="Sample"),
-         name=case_when(name=="Station" & Estimate==max(Estimate) ~ "Station_hu",
-                        TRUE ~ name))%>%
-  mutate(name=factor(name, levels=c("Sample", "Station", "Station_hu", "Month", "Year")))
+  mutate(name=recode(name, Year_fac="Year", Station_fac="Station", ID="Sample"))%>%
+  mutate(name=factor(name, levels=c("Sample", "Station", "Month", "Year")))
 
 p_var<-ggplot(sum2, aes(y=name, x=Estimate, xmin=`l-95% CI`, xmax=`u-95% CI`))+
   geom_pointrange()+
