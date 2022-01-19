@@ -7,7 +7,7 @@
 require(brms)
 
 # Enter the folder where you've saved the "Split data.Rds" file and where you would like the models saved
-save_folder<-file.path("Univariate analyses", "models")
+save_folder<-file.path("Univariate analyses", "Splittail models")
 
 Data_split<-readRDS("Univariate analyses/Split data.Rds")
 
@@ -37,16 +37,16 @@ model1<-brm(as.integer(round(Count)) ~ Tow_area_s + Year_fac*Season + (1|Station
               prior(normal(0,5), class="b")+
               prior(cauchy(0,5), class="sd"),
             chains=3, cores=3, control=list(max_treedepth=15),
-            iter = iterations, warmup = warmup)
-model<-model1 # Ensure all saved models have same name and model1 is not overwritten
-saveRDS(model, file=file.path(save_folder, paste0("Splittail ", 1/N, " station cut ", "1", " of ", N, ".Rds")), compress="xz")
-rm(model)
+            iter = iterations, warmup = warmup,
+            backend = "cmdstanr", threads = threading(2))
+saveRDS(model1, file=file.path(save_folder, paste0("Splittail ", 1/N, " station cut ", "1", " of ", N, ".Rds")), compress="xz")
 gc()
 # Fit remaining models
 for(i in 2:N){
   model<-update(model1, newdata=subset(Data_split, Group_10!=i),
                 chains=3, cores=3, control=list(max_treedepth=15),
-                iter = iterations, warmup = warmup)
+                iter = iterations, warmup = warmup,
+                backend = "cmdstanr", threads = threading(2))
   saveRDS(model, file=file.path(save_folder, paste0("Splittail ", 1/N, " station cut ", i, " of ", N, ".Rds")), compress="xz")
   rm(model)
   gc()
@@ -69,7 +69,8 @@ model1<-brm(as.integer(round(Count)) ~ Tow_area_s + Year_fac*Season + (1|Station
               prior(normal(0,5), class="b")+
               prior(cauchy(0,5), class="sd"),
             chains=3, cores=3, control=list(max_treedepth=15),
-            iter = iterations, warmup = warmup)
+            iter = iterations, warmup = warmup,
+            backend = "cmdstanr", threads = threading(2))
 model<-model1 # Ensure all saved models have same name and model1 is not overwritten
 saveRDS(model, file=file.path(save_folder, paste0("Splittail ", 1/N, " station cut ", "1", " of ", N, ".Rds")), compress="xz")
 rm(model)
@@ -78,7 +79,8 @@ gc()
 for(i in 2:N){
   model<-update(model1, newdata=subset(Data_split, Group_5!=i),
                 chains=3, cores=3, control=list(max_treedepth=15),
-                iter = iterations, warmup = warmup)
+                iter = iterations, warmup = warmup,
+                backend = "cmdstanr", threads = threading(2))
   saveRDS(model, file=file.path(save_folder, paste0("Splittail ", 1/N, " station cut ", i, " of ", N, ".Rds")), compress="xz")
   rm(model)
   gc()
@@ -100,7 +102,8 @@ model1<-brm(as.integer(round(Count)) ~ Tow_area_s + Year_fac*Season + (1|Station
               prior(normal(0,5), class="b")+
               prior(cauchy(0,5), class="sd"),
             chains=3, cores=3, control=list(max_treedepth=15),
-            iter = iterations, warmup = warmup)
+            iter = iterations, warmup = warmup,
+            backend = "cmdstanr", threads = threading(2))
 model<-model1 # Ensure all saved models have same name and model1 is not overwritten
 saveRDS(model, file=file.path(save_folder, paste0("Splittail ", 1/N, " station cut ", "1", " of ", N, ".Rds")), compress="xz")
 rm(model)
@@ -110,7 +113,8 @@ gc()
 for(i in 2:N){
   model<-update(model1, newdata=subset(Data_split, Group_3!=i),
                 chains=3, cores=3, control=list(max_treedepth=15),
-                iter = iterations, warmup = warmup)
+                iter = iterations, warmup = warmup,
+                backend = "cmdstanr", threads = threading(2))
   saveRDS(model, file=file.path(save_folder, paste0("Splittail ", 1/N, " station cut ", i, " of ", N, ".Rds")), compress="xz")
   rm(model)
   gc()
@@ -125,7 +129,8 @@ N<-2
 for(i in 1:N){
   model<-update(model1, newdata=subset(Data_split, Group_2!=i),
                 chains=3, cores=3, control=list(max_treedepth=15),
-                iter = iterations, warmup = warmup)
+                iter = iterations, warmup = warmup,
+                backend = "cmdstanr", threads = threading(2))
   saveRDS(model, file=file.path(save_folder, paste0("Splittail ", 1/N, " station cut ", i, " of ", N, ".Rds")), compress="xz")
   rm(model)
   gc()
@@ -148,7 +153,8 @@ model1<-brm(as.integer(round(Count)) ~ Tow_area_s + Year_fac*Season + (1|Station
               prior(normal(0,5), class="b")+
               prior(cauchy(0,5), class="sd"),
             chains=3, cores=3, control=list(max_treedepth=15),
-            iter = iterations, warmup = warmup)
+            iter = iterations, warmup = warmup,
+            backend = "cmdstanr", threads = threading(2))
 model<-model1 # Ensure all saved models have same name and model1 is not overwritten
 saveRDS(model, file=file.path(save_folder, paste0("Splittail ", 2/N, " station cut ", "1", " of ", N, ".Rds")), compress="xz")
 rm(model)
@@ -158,7 +164,8 @@ gc()
 for(i in 2:N){
   model<-update(model1, newdata=subset(Data_split, Group_2.3==i),
                 chains=3, cores=3, control=list(max_treedepth=15),
-                iter = iterations, warmup = warmup)
+                iter = iterations, warmup = warmup,
+                backend = "cmdstanr", threads = threading(2))
   saveRDS(model, file=file.path(save_folder, paste0("Splittail ", 2/N, " station cut ", i, " of ", N, ".Rds")), compress="xz")
   rm(model)
   gc()
@@ -177,7 +184,8 @@ model1<-brm(as.integer(round(Count)) ~ Tow_area_s + Year_fac*Season + (1|Station
               prior(normal(0,5), class="b")+
               prior(cauchy(0,5), class="sd"),
             chains=3, cores=3, control=list(max_treedepth=15),
-            iter = iterations, warmup = warmup)
+            iter = iterations, warmup = warmup,
+            backend = "cmdstanr", threads = threading(2))
 model<-model1 # Ensure all saved models have same name and model1 is not overwritten
 saveRDS(model, file=file.path(save_folder, paste0("Splittail 1 month cut ", "1", " of ", 3, ".Rds")), compress="xz")
 rm(model)
@@ -187,7 +195,8 @@ gc()
 for(i in 2:3){
   model<-update(model1, newdata=subset(Data_split, Month_num!=i),
                 chains=3, cores=3, control=list(max_treedepth=15),
-                iter = iterations, warmup = warmup)
+                iter = iterations, warmup = warmup,
+                backend = "cmdstanr", threads = threading(2))
   saveRDS(model, file=file.path(save_folder, paste0("Splittail 1 month cut ", i, " of ", 3, ".Rds")), compress="xz")
   rm(model)
   gc()
@@ -201,7 +210,8 @@ if(!is.null(warn)){
 for(i in 1:3){
   model<-update(model1, newdata=subset(Data_split, Month_num==i),
                 chains=3, cores=3, control=list(max_treedepth=15),
-                iter = iterations, warmup = warmup)
+                iter = iterations, warmup = warmup,
+                backend = "cmdstanr", threads = threading(2))
   saveRDS(model, file=file.path(save_folder, paste0("Splittail 2 month cut ", i, " of ", 3, ".Rds")), compress="xz")
   rm(model)
   gc()

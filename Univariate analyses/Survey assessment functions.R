@@ -60,7 +60,7 @@ Post_processor<-function(model, max_year=2018, model_name=NULL, Intervals=NULL){
 # ESS should be at least 100 per chain (300 total), Rhat should be <1.05.
 model_diagnose<-function(model){
   sum<-summary(model)
-  out<-tibble(par=c(names(sum$fixed[,1]), names(sum$random)), 
+  out<-tibble(par=c(row.names(sum$fixed), names(sum$random)), 
               Bulk_ESS=c(sum$fixed[,"Bulk_ESS"], sum$random$ID[,"Bulk_ESS"], sum$random$Station_fac[,"Bulk_ESS"]),
               Tail_ESS=c(sum$fixed[,"Tail_ESS"], sum$random$ID[,"Tail_ESS"], sum$random$Station_fac[,"Tail_ESS"]),
               Rhat=c(sum$fixed[,"Rhat"], sum$random$ID[,"Rhat"], sum$random$Station_fac[,"Rhat"]))
@@ -86,7 +86,7 @@ model_diagnose<-function(model){
   if(length(c(Bulk_ESS, Tail_ESS, Rhat)>0)){
     return(out)
   }else{
-    print("All good, no warnings!")
+    message("All good, no warnings!")
   }
 }
 
