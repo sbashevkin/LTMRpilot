@@ -77,11 +77,11 @@ ggsave(p_overlay, file="Univariate analyses/Figures/Reduced_sim_overlay.png", de
 
 # Plot distribution of Splittail across the sampling stations
 
-load("Univariate analyses/Split data.Rds")
+Data_split<-readRDS("Univariate analyses/Split data.Rds")
 
 Data_sum<-Data_split%>%
   group_by(Station, Latitude, Longitude)%>%
-  summarise(Count=mean(CPUE)*mean(Tow_area))%>%
+  summarise(Count=mean(CPUE)*mean(Tow_area), .groups="drop")%>%
   st_as_sf(coords=c("Longitude", "Latitude"), crs=4326)
 
 
