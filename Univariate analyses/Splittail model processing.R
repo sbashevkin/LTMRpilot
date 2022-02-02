@@ -228,19 +228,21 @@ options(future.globals.maxSize = 70000000000)
 future_map(Reduced_models$File, ~Distributional_model_plotter(.x, Full_post), .options=furrr_options(seed=TRUE), .progress=TRUE)
 
 # Create example ribbon plots for full model and 1 reduced model for figure in technical report
-model<-readRDS(file.path("Univariate analyses", "Splittail models", "Splittail 0.1 station cut 1 of 10.Rds"))
+model<-readRDS(file.path("Univariate analyses", "Splittail models", "Splittail 0.5 station cut 1 of 2.Rds"))
 Data<-model_predictor(model)
 rm(model)
-p1<-Ribbon_plotter(Full_post, Data, ".value")+ylab("Predicted count")+theme(legend.position=c(0.92, 0.85), legend.background = element_rect(color="black"))
+p1<-Ribbon_plotter(Full_post, Data, ".value")+ylab("Predicted count")+theme(legend.position=c(0.92, 0.85), legend.background = element_rect(color="black"))+
+  coord_cartesian(ylim=c(0, 0.8), expand=0, clip=F)
 p2<-Ribbon_plotter(Full_post, Data, "Change_local")+ylab("Local trend")+theme(legend.position = "none")
 
 p<-p1/p2+plot_annotation(tag_levels = "A", tag_suffix = ")")
-ggsave(p, file=paste0("Univariate analyses/Figures/", str_remove(Reduced_models%>%filter(N_station==10 & Replicate==1)%>%pull(File), fixed(".Rds")), 
+ggsave(p, file=paste0("Univariate analyses/Figures/", str_remove(Reduced_models%>%filter(N_station==2 & Replicate==1)%>%pull(File), fixed(".Rds")), 
                       " ribbon example.png"), device="png", units="in", width=8, height=8)
 
 # For presentation
 p1<-Ribbon_plotter(filter(Full_post, Season=="Winter"), filter(Data, Season=="Winter"), ".value", FALSE)+
-  ylab("Predicted count")+xlab("")+
+  ylab("Predicted count")+
+  xlab("")+
   theme(legend.position=c(0.1, 0.75), legend.background = element_rect(color="black"), text=element_text(size=18), plot.margin = margin(b=-150))
 p2<-Ribbon_plotter(filter(Full_post, Season=="Winter"), filter(Data, Season=="Winter"), "Change_local", FALSE)+ylab("Local trend")+theme(legend.position = "none", text=element_text(size=18), plot.margin = margin(t=-150))
 p<-p1/p2
