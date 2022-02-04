@@ -12,11 +12,63 @@ source("Univariate analyses/Survey assessment functions.R")
 
 # Full model -------------------------------------------------------------
 
+# Load data 
+Data_split<-readRDS("Univariate analyses/Split data.Rds")
+
 # Load the full model
 Splittail_full_model<-readRDS("Univariate analyses/Splittail models/Splittail full model.Rds")
 
 # Evaluate the full model for any issues
 Full_eval<-model_diagnose(Splittail_full_model)
+
+# Evaluate the temporal autocorrelation of the full model
+auto<-Data_split%>%
+  mutate(Resid=residuals(Splittail_full_model)[,1])%>%
+  mutate(Station=paste(Source, Station))%>%
+  group_by(Station)%>%
+  mutate(N=n())%>%
+  filter(N>10)%>%
+  summarise(N=n(), 
+            ACF=list(pacf(Resid, plot=F)), 
+            ci=qnorm((1 + 0.95)/2)/sqrt(n()), .groups="drop")%>% # ci formula from https://stackoverflow.com/questions/14266333/extract-confidence-interval-values-from-acf-correlogram
+  arrange(-N)
+
+auto_sum<-auto%>%
+  rowwise()%>%
+  mutate(lag=list(ACF$lag), acf=list(ACF$acf))%>%
+  unnest(cols=c(lag, acf))%>%
+  arrange(-N)%>%
+  mutate(Station=factor(Station, levels=unique(Station)))
+
+# Overall proportion of stations with autocorrelation
+length(which(abs(auto_sum$acf)>abs(auto_sum$ci)))/nrow(auto_sum)
+# Proportion at lag 1
+length(which(abs(filter(auto_sum, lag==1)$acf)>abs(filter(auto_sum, lag==1)$ci)))/nrow(filter(auto_sum, lag==1))
+# Proportion at lag 2
+length(which(abs(filter(auto_sum, lag==2)$acf)>abs(filter(auto_sum, lag==2)$ci)))/nrow(filter(auto_sum, lag==2))
+# Proportion at lag 3
+length(which(abs(filter(auto_sum, lag==3)$acf)>abs(filter(auto_sum, lag==3)$ci)))/nrow(filter(auto_sum, lag==3))
+# Proportion at lag 4
+length(which(abs(filter(auto_sum, lag==4)$acf)>abs(filter(auto_sum, lag==4)$ci)))/nrow(filter(auto_sum, lag==4))
+
+ggplot(filter(auto_sum, lag==1))+
+  geom_point(aes(x=Station, y=abs(acf)), fill="black", shape=21)+
+  geom_point(data=filter(auto_sum, lag==1 & abs(acf)>abs(ci)), aes(x=Station, y=abs(acf)), fill="red", shape=21)+
+  geom_point(aes(x=Station, y=abs(ci)), fill="white", shape=21)+
+  geom_segment(aes(x=Station, y=abs(acf), xend=Station, yend=abs(ci)), linetype=2)+
+  geom_segment(data=filter(auto_sum, lag==1 & abs(acf)>abs(ci)), aes(x=Station, y=abs(acf), xend=Station, yend=abs(ci)), color="red")+
+  theme_bw()+
+  theme(panel.grid=element_blank(), axis.text.x=element_text(angle=45, hjust=1))
+
+ggplot(filter(auto_sum, lag%in%c(1:4)))+
+  geom_point(aes(x=Station, y=abs(acf)), fill="black", shape=21)+
+  geom_point(data=filter(auto_sum, lag%in%c(1:4) & abs(acf)>abs(ci)), aes(x=Station, y=abs(acf)), fill="red", shape=21)+
+  geom_point(aes(x=Station, y=abs(ci)), fill="white", shape=21)+
+  geom_segment(aes(x=Station, y=abs(acf), xend=Station, yend=abs(ci)), linetype=2)+
+  geom_segment(data=filter(auto_sum, lag%in%c(1:4) & abs(acf)>abs(ci)), aes(x=Station, y=abs(acf), xend=Station, yend=abs(ci)), color="red")+
+  facet_wrap(~lag)+
+  theme_bw()+
+  theme(panel.grid=element_blank(), axis.text.x=element_text(angle=45, hjust=1))
 
 # Calculate 95% credidible intervals for the local trend estimates from the full model
 Full_change<-Post_processor(Splittail_full_model, max_year=2018, model_name="Full")
@@ -31,9 +83,6 @@ saveRDS(Full_change, file="Univariate analyses/Full model local trend.Rds")
 # Purpose: For the temporal sampling effort reductions, find seasons and years
 # that no longer have any data in the various data reduction scenarios, so those
 # seasons and years can be removed from any analyses. 
-
-# Load data 
-Data_split<-readRDS("Univariate analyses/Split data.Rds")
 
 Months<-Data_split%>%
   filter(Year<=2018)%>% # Filter to the time range of inference
