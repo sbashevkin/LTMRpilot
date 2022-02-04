@@ -19,7 +19,7 @@ Splittail_full_model<-readRDS("Univariate analyses/Splittail models/Splittail fu
 Full_eval<-model_diagnose(Splittail_full_model)
 
 # Calculate 95% credidible intervals for the local trend estimates from the full model
-Full_change<-Post_processor(Splittail_full_model, max_year=2019, model_name="Full")
+Full_change<-Post_processor(Splittail_full_model, max_year=2018, model_name="Full")
 
 # Remove full model from memory
 rm(Splittail_full_model)
@@ -36,10 +36,10 @@ saveRDS(Full_change, file="Univariate analyses/Full model local trend.Rds")
 Data_split<-readRDS("Univariate analyses/Split data.Rds")
 
 Months<-Data_split%>%
-  filter(Year<=2019)%>% # Filter to the time range of inference
+  filter(Year<=2018)%>% # Filter to the time range of inference
   group_by(Month_num, Year, Season, .drop=FALSE)%>%
   summarise(N=n(), .groups="drop")%>% # Count number of data points in each month, year, and season
-  complete(Month_num=1:3, Year=1985:2019, Season)%>% # Fill in missing month, year, and season combinations
+  complete(Month_num=1:3, Year=1985:2018, Season)%>% # Fill in missing month, year, and season combinations
   filter(is.na(N)) # Select only month, years, and seasons with no data
 
 # Months not represented are:
@@ -79,7 +79,7 @@ Reduced_model_processor<- function(file){
   model<-readRDS(file.path("Univariate analyses", "Splittail models", file))
   Reduced_eval<-model_diagnose(model)
   
-  Reduced_change<-Post_processor(model, max_year=2019, model_name=file, Intervals=Full_change)
+  Reduced_change<-Post_processor(model, max_year=2018, model_name=file, Intervals=Full_change)
   rm(model)
   gc()
   message(paste("Finished:", file))
