@@ -14,7 +14,7 @@ random_groups<-function(seed, N_total, N_groups){
 }
 
 # Create posterior predictions and calculate change from one year to next within each season
-model_predictor<-function(model, max_year=2018){
+model_predictor<-function(model, max_year=2019){
   out<-expand.grid(Tow_area_s=0,  Year_fac=factor(1985:max_year), Season=c("Winter", "Spring", "Summer", "Fall"))%>%
     mutate(Year=as.numeric(as.character(Year_fac)))%>%
     add_epred_draws(model, re_formula=NA, scale="response", value=".value")%>%
@@ -33,7 +33,7 @@ model_predictor<-function(model, max_year=2018){
 # For the reduced models, calculates the proportion of posterior samples within the 95% intervals of the full model
 # model_name = "Full", or "Reduced"
 # Intervals (i.e., output of this function when model_name="Full") should be supplied when model_name="Reduced"
-Post_processor<-function(model, max_year=2018, model_name=NULL, Intervals=NULL){
+Post_processor<-function(model, max_year=2019, model_name=NULL, Intervals=NULL){
   out<-model_predictor(model, max_year=max_year)%>%
     filter(Year!=min(Year))%>%
     mutate(Model=model_name)%>%
@@ -165,7 +165,7 @@ Ribbon_plotter<-function(Full_post, Reduced_post, Y, Facet=T){
     {if(Facet){
       facet_wrap(~Season, nrow=1)
     }}+
-    scale_x_continuous(breaks=seq(1985, 2020, by=5), limits=c(1985, 2018))+
+    scale_x_continuous(breaks=seq(1985, 2020, by=5), limits=c(1985, 2019))+
     scale_fill_manual(values = c("dodgerblue3", "firebrick1"), aesthetics = c("fill", "color"))+
     xlab("Year")+
     theme_bw()+

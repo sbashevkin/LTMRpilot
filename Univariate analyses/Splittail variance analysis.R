@@ -50,7 +50,7 @@ saveRDS(model_var2, file=file.path("Univariate analyses", "Splittail models", "v
 # Create plots ------------------------------------------------------------
 
 # Load models
-model_var2<-readRds(file.path("Univariate analyses", "Splittail models", "variance model.Rds"))
+model_var2<-readRDS(file.path("Univariate analyses", "Splittail models", "variance model.Rds"))
 
 # Summarise model parameters and convert to data frame
 sum<-summary(model_var2)
