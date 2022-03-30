@@ -147,7 +147,8 @@ Reduced_probs<-future_map(Reduced_models$File, Reduced_model_processor, .options
 # No Bulk_ESS, Tail_ESS, or Rhat issues from any models
 
 # Save outputs
-saveRDS(Reduced_probs, file="Univariate analyses/Reduced model proportions.Rds")
+#saveRDS(Reduced_probs, file="Univariate analyses/Reduced model proportions.Rds")
+Reduced_probs<-readRDS("Univariate analyses/Reduced model proportions.Rds")
 
 # Convert Reduced_probs from a list to a dataframe and add more important info
 Reduced_probs_extracted<-map_dfr(1:nrow(Reduced_models), ~Reduced_probs[[.x]]$Reduced_prob%>%
@@ -164,14 +165,35 @@ Reduced_probs_extracted<-map_dfr(1:nrow(Reduced_models), ~Reduced_probs[[.x]]$Re
   mutate(Season=factor(Season, levels=c("Winter", "Spring", "Summer", "Fall"))) # Reorder seasons
 
 # Plot results for each replicate separately
-p_rep<-ggplot(Reduced_probs_extracted, aes(x=Year, y=Prob_local, color=as.factor(Replicate), group=Replicate))+
+p_rep_station<-ggplot(filter(Reduced_probs_extracted, Cut_type=="Station"), aes(x=Year, y=Prob_local, color=as.factor(Replicate), group=Replicate))+
   geom_line()+
-  facet_grid(Cut_type*round(Cut,2)~Season)+
+  facet_grid(round(Cut,2)~Season)+
+  labs(tag="Station")+
   scale_color_brewer(palette="Paired", aesthetics = c("fill", "color"))+
   coord_cartesian(expand=0, ylim=c(0,1))+
-  ylab("Proportional overlap with full model")+
+  ylab("")+
   theme_bw()+
-  theme(strip.background=element_blank(), legend.position="none", text=element_text(size=8), panel.spacing.y = unit(0.5, "lines"))
+  theme(strip.background=element_blank(), legend.position="none", text=element_text(size=8), panel.spacing.y = unit(0.5, "lines"), 
+        plot.tag.position = c(1.01, 0.5), plot.tag=element_text(angle=-90), plot.margin = margin(r=20))
+
+p_rep_month<-ggplot(filter(Reduced_probs_extracted, Cut_type=="Month"), aes(x=Year, y=Prob_local, color=as.factor(Replicate), group=Replicate))+
+  geom_line()+
+  facet_grid(round(Cut,2)~Season)+
+  labs(tag="Month")+
+  scale_color_brewer(palette="Dark2", aesthetics = c("fill", "color"))+
+  coord_cartesian(expand=0, ylim=c(0,1))+
+  ylab("")+
+  xlab("")+
+  theme_bw()+
+  theme(strip.background=element_blank(), legend.position="none", text=element_text(size=8), panel.spacing.y = unit(0.5, "lines"), 
+        plot.tag.position = c(1.01, 0.5), plot.tag=element_text(angle=-90), plot.margin = margin(r=20))
+
+p_lab <- ggplot() + 
+  annotate(geom = "text", x = 1, y = 1, label = "Proportional overlap with full model", angle = 90) +
+  coord_cartesian(clip = "off")+
+  theme_void()
+
+p_rep<-(p_lab|wrap_plots(p_rep_month, p_rep_station, ncol=1, heights=c(2,5)))+plot_layout(widths=c(1,20))
 
 ggsave(p_rep, file="Univariate analyses/Figures/Publication Splittail reduced model replicates.png", device="png", units="in", width=6, height=6)
 # Summarise results for each year and season ------------------------------
