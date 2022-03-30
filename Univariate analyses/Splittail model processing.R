@@ -174,19 +174,21 @@ p_rep_station<-ggplot(filter(Reduced_probs_extracted, Cut_type=="Station"), aes(
   ylab("")+
   theme_bw()+
   theme(strip.background=element_blank(), legend.position="none", text=element_text(size=8), panel.spacing.y = unit(0.5, "lines"), 
-        plot.tag.position = c(1.01, 0.5), plot.tag=element_text(angle=-90), plot.margin = margin(r=20))
+        plot.tag.position = c(1.01, 0.5), plot.tag=element_text(angle=-90, hjust=1), plot.margin = margin(r=20, t=5),
+        strip.text.x = element_blank())
 
 p_rep_month<-ggplot(filter(Reduced_probs_extracted, Cut_type=="Month"), aes(x=Year, y=Prob_local, color=as.factor(Replicate), group=Replicate))+
   geom_line()+
   facet_grid(round(Cut,2)~Season)+
   labs(tag="Month")+
-  scale_color_brewer(palette="Dark2", aesthetics = c("fill", "color"))+
+  scale_color_viridis_d(aesthetics = c("fill", "color"))+
   coord_cartesian(expand=0, ylim=c(0,1))+
   ylab("")+
   xlab("")+
   theme_bw()+
   theme(strip.background=element_blank(), legend.position="none", text=element_text(size=8), panel.spacing.y = unit(0.5, "lines"), 
-        plot.tag.position = c(1.01, 0.5), plot.tag=element_text(angle=-90), plot.margin = margin(r=20))
+        plot.tag.position = c(1.01, 0.5), plot.tag=element_text(angle=-90), plot.margin = margin(r=20, b=5),
+        axis.text.x=element_blank(), axis.ticks.x=element_blank())
 
 p_lab <- ggplot() + 
   annotate(geom = "text", x = 1, y = 1, label = "Proportional overlap with full model", angle = 90) +
@@ -194,7 +196,7 @@ p_lab <- ggplot() +
   theme_void()
 
 p_rep<-(p_lab|wrap_plots(p_rep_month, p_rep_station, ncol=1, heights=c(2,5)))+plot_layout(widths=c(1,20))
-
+p_rep
 ggsave(p_rep, file="Univariate analyses/Figures/Publication Splittail reduced model replicates.png", device="png", units="in", width=6, height=6)
 # Summarise results for each year and season ------------------------------
 
