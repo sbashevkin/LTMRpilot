@@ -96,4 +96,4 @@ p_map<-ggplot()+
   theme_bw()+
   theme(legend.position=c(0.85, 0.18), legend.background=element_rect(color="black"))
 
-ggsave(p_map, file="Univariate analyses/Figures/Splittail map.png", device="png", height=5, width=5, units="in")
+ggsave(p_map, file="Univariate analyses/Figures/Figure 2.tiff", device="tiff", dpi=400, height=5, width=5, units="in")
