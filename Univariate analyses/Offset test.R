@@ -10,6 +10,8 @@ require(tidyr)
 require(furrr)
 source("Univariate analyses/Survey assessment functions.R")
 
+# Skip to line 46 to load the model and criterion results. 
+
 Data_split<-readRDS("Univariate analyses/Split data.Rds")
 
 iterations<-5e3
