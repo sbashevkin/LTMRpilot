@@ -15,7 +15,7 @@ random_groups<-function(seed, N_total, N_groups){
 
 # Create posterior predictions and calculate change from one year to next within each season
 model_predictor<-function(model, max_year=2018){
-  out<-expand.grid(Tow_area_s=0,  Year_fac=factor(1985:max_year), Season=c("Winter", "Spring", "Summer", "Fall"))%>%
+  out<-expand.grid(Tow_area_s=0, Tow_area=1081, Year_fac=factor(1985:max_year), Season=c("Winter", "Spring", "Summer", "Fall"))%>%
     mutate(Year=as.numeric(as.character(Year_fac)))%>%
     add_epred_draws(model, re_formula=NA, scale="response", value=".value")%>%
     ungroup()%>%

@@ -6,6 +6,7 @@
 - *Splittail model fitting.R*: Fit the full and all reduced models
 - *Splittail model processing.R*: Evaluate and process the full and reduced models. Create plots for the results of the Splittail case study
 - *Additional plots for technical chapter.R*: Create simulation plots for conceptual diagram and Splittail distribution plot for the technical chapter
+- *Offset test.R*: Test whether the models would be improved by incorporating sampling effort via an offset of the log of `Tow_area`. 
 
 # Data
 

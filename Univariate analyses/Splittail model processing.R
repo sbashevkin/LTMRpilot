@@ -70,7 +70,7 @@ ggplot(filter(auto_sum, lag%in%c(1:4)))+
   theme_bw()+
   theme(panel.grid=element_blank(), axis.text.x=element_text(angle=45, hjust=1))
 
-# Calculate 95% credidible intervals for the local trend estimates from the full model
+# Calculate 95% credible intervals for the local trend estimates from the full model
 Full_change<-Post_processor(Splittail_full_model, max_year=2018, model_name="Full")
 
 # Remove full model from memory
