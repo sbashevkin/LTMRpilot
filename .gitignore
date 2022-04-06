@@ -41,3 +41,4 @@ vignettes/*.pdf
 *.RData
 
 Splittail models/
+*.tiff

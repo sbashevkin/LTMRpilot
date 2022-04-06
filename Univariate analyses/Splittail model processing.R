@@ -197,7 +197,7 @@ p_lab <- ggplot() +
 
 p_rep<-(p_lab|wrap_plots(p_rep_month, p_rep_station, ncol=1, heights=c(2,5)))+plot_layout(widths=c(1,20))
 p_rep
-ggsave(p_rep, file="Univariate analyses/Figures/Publication Splittail reduced model replicates.png", device="png", units="in", width=6, height=6)
+ggsave(p_rep, file="Univariate analyses/Figures/Figure 7.tiff", device="tiff", dpi=400, units="in", width=6, height=6)
 # Summarise results for each year and season ------------------------------
 
 Reduced_probs_year<-Reduced_probs_extracted%>%
@@ -242,7 +242,7 @@ p_points<-ggplot(Reduced_probs_season, aes(x=Cut, y=Prob_local_mean, ymin=Prob_l
   theme_bw()+
   theme(strip.background=element_blank(), text=element_text(size=8), legend.position=c(0.9, 0.2), legend.background=element_rect(color="black"))
 
-ggsave(p_points, file="Univariate analyses/Figures/Publication Splittail reduced model summarized.png", device="png", units="in", width=5, height=3)
+ggsave(p_points, file="Univariate analyses/Figures/Figure 8.tiff", device="tiff", dpi=400, units="in", width=5, height=3)
 
 # For presentation
 p_points<-ggplot(Reduced_probs_season%>%filter(Season=="Winter"), aes(x=Cut, y=Prob_local_mean, ymin=Prob_local_mean-Prob_local_sd, 
@@ -309,8 +309,7 @@ p1<-Ribbon_plotter(Full_post, Data, ".value")+ylab("Predicted count")+theme(lege
 p2<-Ribbon_plotter(Full_post, Data, "Change_local")+ylab("Local trend")+theme(legend.position = "none")
 
 p<-p1/p2+plot_annotation(tag_levels = "A", tag_suffix = ")")
-ggsave(p, file=paste0("Univariate analyses/Figures/", str_remove(Reduced_models%>%filter(N_station==2 & Replicate==1)%>%pull(File), fixed(".Rds")), 
-                      " ribbon example.png"), device="png", units="in", width=8, height=8)
+ggsave(p, file="Univariate analyses/Figures/Figure 6.tiff", device="tiff", dpi=400, units="in", width=8, height=8)
 
 # For presentation
 p1<-Ribbon_plotter(filter(Full_post, Season=="Winter"), filter(Data, Season=="Winter"), ".value", FALSE)+
