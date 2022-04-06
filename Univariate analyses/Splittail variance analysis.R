@@ -36,6 +36,17 @@ model_var2<-brm(as.integer(round(Count)) ~ Tow_area_s + (1|Year_fac) + (1|Month)
                 chains=3, cores=3, control=list(adapt_delta=0.9),
                 iter = iterations, warmup = warmup,
                 backend = "cmdstanr", threads = threading(2))
+model_var2<-add_criterion(model_var2, c("waic", "loo"), cores=6)
+
+# Try with an offset for tow area
+model_var3<-brm(as.integer(round(Count)) ~ offset(log(Tow_area)) + (1|Year_fac) + (1|Month) + (1|Station_fac) + (1|ID),
+                family=poisson, data=Data_split,
+                prior=prior(normal(0,5), class="Intercept")+
+                  prior(cauchy(0,5), class="sd"),
+                chains=3, cores=3, control=list(adapt_delta=0.9),
+                iter = iterations, warmup = warmup,
+                backend = "cmdstanr", threads = threading(2))
+model_var3<-add_criterion(model_var3, c("waic", "loo"), cores=6)
 
 p<-pp_check(model_var2)
 p
